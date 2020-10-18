@@ -75,16 +75,17 @@ class Main(commands.Cog):
                             with open(modules_file, 'w') as f:
                                 for module in course.get_modules():
                                     if hasattr(module, 'name'):
-                                        module_with_newline = module.name + '\n'
-                                        f.write(module_with_newline)
+                                        f.write(module.name + '\n')
 
                                     for item in module.get_module_items():
                                         if hasattr(item, 'title'):
-                                            item_with_newline = item.title + '\n'
-                                            f.write(item_with_newline)
+                                            if hasattr(item, 'html_url'):
+                                                f.write(item.html_url + '\n')
+                                            else:
+                                                f.write(item.title + '\n')
                     else:
                         await ctx.send(f'This channel is already tracking {course.name}.')
-                else:   # args[0] is 'disable'
+                else:   # this is the case where args[0] is 'disable'
                     deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
                     
                     if os.stat(watchers_file).st_size == 0:

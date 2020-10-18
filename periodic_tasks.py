@@ -1,7 +1,9 @@
 import asyncio
 import os
 import util
+import canvasapi
 from canvasapi import Canvas
+import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import traceback
@@ -14,6 +16,8 @@ COURSES_DIRECTORY = "./data/courses"
 CANVAS_URL = "https://canvas.ubc.ca/"
 CANVAS_TOKEN = os.getenv('CANVAS_TOKEN')
 CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN)
+
+RED = 0xff0000
 
 def setup(bot):
     bot.add_cog(Tasks(bot))
@@ -49,42 +53,75 @@ class Tasks(commands.Cog):
         - send the names of any modules not in the file to all channels in COURSES_DIRECTORY/{course_id}/watchers.txt
         - update COURSES_DIRECTORY/{course_id}/modules.txt with the modules we retrieved from Canvas
         """
-
-        def helper(s, perm_list, temp_list, known_list, acc_length, acc_length_limit, s_length_limit):
-            """
-            Function signature: (str, list of str, list of str, list of str, int, int, int) -> bool
-
-            If s is not in known_list, then the string '* {s}' is appended to temp_list no matter what. However, before
-            we append the string to the list:
-            - if len(s) exceeds s_length_limit, then s is first truncated to have length s_length_limit - 6.
-              An ellipsis and a newline character (...\n) are then appended to s so that s has length s_length_limit - 2. 
-              As a result, '* {s}' has length s_length_limit.
-            - if acc_length + len(s) + 2 > acc_length_limit, then:
-                - all the elements of temp_list are concatenated, and the result is appended to perm_list.
-                - temp_list is cleared.
-
-            This function modifies perm_list and temp_list only.
-            """
-            if not s in known_list:
-                if len(s) > s_length_limit:
-                    s = s[:s_length_limit - 6] + '...\n'
-                if len(s) + 2 + acc_length > acc_length_limit:
-                    perm_list.append(''.join(temp_list))
-                    temp_list.clear()
-                temp_list.append(f'* {s}')
         
-        def get_total_str_length(prev_length, los):
+        def update_embed(embed, module, num_fields, embed_list):
             """
-            Returns the total length of the strings in los, assuming the following:
-            - los contains at least one string.
-            - if los contains more than 1 string, then prev_length is the total length of every 
-              string in los except the last one.
-            """
-            if len(los) == 1:
-                return len(los[0])
-            else:
-                return prev_length + len(los[len(los) - 1])
+            Signature: (discord.Embed, Union[canvasapi.module.Module, canvasapi.module.ModuleItem], int, List[discord.Embed]) -> Boolean
 
+            Adds a field to embed containing a hyperlink to given Canvas module/module item. The hyperlink
+            is omitted if module does not have the html_url attribute -- only the module's name/title attribute is 
+            included in the field.
+
+            The embed object must have at most 24 fields. 
+
+            `num_fields` is the number of fields the embed object has. Note that this function does not (and cannot)
+            update num_fields, since integers are immutable in Python.
+
+            The embed object is appended to embed_list if num_fields is 24.
+
+            This function returns True if the embed object is appended to embed_list. Otherwise, the function returns False.
+
+            Note that Python stores references in lists -- hence, modifying embed after calling
+            this function will modify embed_list if embed was added to embed_list.
+            """
+            if hasattr(module, 'html_url'):
+                if hasattr(module, 'title'):
+                    field = f'[{module.title}]({module.html_url})'
+                else:
+                    field = f'[{module.name}]({module.html_url})'
+            else:
+                if hasattr(module, 'title'):
+                    field = f'{module.title}'
+                else:
+                    field = f'{module.name}'
+            
+            if isinstance(module, canvasapi.module.Module):
+                embed.add_field(name="Module", value=field, inline=False)
+            else:
+                embed.add_field(name="Module Item", value=field, inline=False)
+
+            if num_fields == 24:
+                embed_list.append(embed)
+                return True
+            
+            return False
+        
+        def handle_module(module, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
+            """
+            Signature: (canvasapi.module.Module, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> int
+            """
+            module_with_newline = module.name + '\n'
+            modules_file.write(module_with_newline)
+
+            if not module_with_newline in existing_modules:
+                embed_appended = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
+                return 0 if embed_appended else curr_embed_num_fields + 1
+            return curr_embed_num_fields
+        
+        def handle_module_item(item, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
+            """
+            Signature: (canvasapi.module.ModuleItem, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> int
+            """
+            if hasattr(item, 'html_url'):
+                to_write = item.html_url + '\n'
+            else:
+                to_write = item.title + '\n'
+                
+            modules_file.write(to_write)
+            if to_write not in existing_modules:
+                embed_appended = update_embed(curr_embed, item, curr_embed_num_fields, embed_list)
+                return 0 if embed_appended else curr_num_fields + 1
+            return curr_embed_num_fields
 
         if (os.path.exists(COURSES_DIRECTORY)):
             courses = [name for name in os.listdir(COURSES_DIRECTORY)]
@@ -105,59 +142,40 @@ class Tasks(commands.Cog):
 
                         with open(modules_file, 'r') as m:
                             existing_modules = set(m.readlines())
-                            
-                        # This list contains Canvas module names that are not contained
-                        # in the existing modules read from the modules file. 
-                        # 
-                        # Discord has a message limit of 2000 characters.
-                        # Each newline character counts as a character.
-                        # The messages sent by the bot will have the following format:
-                        # ```\n{element}\n``` for each element in differences
-                        #
-                        # Therefore, each element has a maximum size of 1992.
-                        differences = []
                         
-                        # A temporary list where we store names of modules not found
-                        # in existing_modules. Each element has the form '* {module.name}\n'
-                        temp_diff = []
+                        embeds_to_send = []
 
-                        # The total length of all strings in the temp_diff list.
-                        temp_diff_str_length = 0
+                        # TODO: in order of importance
+                        # 1. Prevent embed length exceeding 6000 chars
+                        # 2. Documentation
+                        # 3. Incorporate max_identifier_length
 
-                        # All elements in temp_diff are truncated to this length
-                        max_elem_length = 120
+                        max_identifier_length = 120
+                        curr_embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
+                        curr_num_fields = 0
 
                         with open(modules_file, 'w') as m:
                             for module in course.get_modules():
                                 if hasattr(module, 'name'):
-                                    module_with_newline = module.name + '\n'
-                                    m.write(module_with_newline)
-                                    helper(module_with_newline, differences, temp_diff, existing_modules, temp_diff_str_length, 1992, max_elem_length)
-
-                                    if temp_diff:
-                                        temp_diff_str_length = get_total_str_length(temp_diff_str_length, temp_diff)
+                                    curr_num_fields = handle_module(module, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
+                                    if curr_num_fields == 0:
+                                        curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
                                     
                                     for item in module.get_module_items():
                                         if hasattr(item, 'title'):
-                                            item_with_newline = item.title + '\n'
-                                            m.write(item_with_newline)
-                                            helper(item_with_newline, differences, temp_diff, existing_modules, temp_diff_str_length, 1992, max_elem_length)
-                                            
-                                            if temp_diff:
-                                                temp_diff_str_length = get_total_str_length(temp_diff_str_length, temp_diff)
+                                            curr_num_fields = handle_module_item(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
+                                            if curr_num_fields == 0:
+                                                curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
                         
-                        # Get any other strings in temp_diff into differences
-                        if temp_diff:
-                            differences.append(''.join(temp_diff))
-                            temp_diff.clear()
+                        if curr_num_fields:
+                            embeds_to_send.append(curr_embed)
                         
-                        if differences:
+                        if embeds_to_send:
                             with open(watchers_file, 'r') as w:
                                 for channel_id in w:
                                     channel = self.bot.get_channel(int(channel_id.rstrip()))
-                                    await channel.send(f'New modules found for {course.name}:')
-                                    for element in differences:
-                                        await channel.send(f'```\n{element}\n```')
+                                    for element in embeds_to_send:
+                                        await channel.send(embed=element)
 
                     except Exception:
                         print(traceback.format_exc(), flush=True)
