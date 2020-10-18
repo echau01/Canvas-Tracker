@@ -17,6 +17,9 @@ CANVAS_URL = "https://canvas.ubc.ca/"
 CANVAS_TOKEN = os.getenv('CANVAS_TOKEN')
 CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN)
 
+# Module names and ModuleItem titles are truncated to this length
+MAX_IDENTIFIER_LENGTH = 100
+
 RED = 0xff0000
 
 def setup(bot):
@@ -62,10 +65,11 @@ class Tasks(commands.Cog):
             is omitted if module does not have the html_url attribute -- only the module's name/title attribute is 
             included in the field.
 
-            The embed object must have at most 24 fields. 
+            If the module's identifier (its name or title) has over MAX_IDENTIFIER_LENGTH characters, we truncate the identifier
+            and append an ellipsis (...) so that it has MAX_IDENTIFIER_LENGTH characters.
 
-            `num_fields` is the number of fields the embed object has. Note that this function does not (and cannot)
-            update num_fields, since integers are immutable in Python.
+            The embed object must have at most 24 fields. `num_fields` is the number of fields the embed object has. 
+            Note that this function does not (and cannot) update num_fields, since integers are immutable in Python.
 
             The embed object is appended to embed_list if num_fields is 24.
 
@@ -74,16 +78,16 @@ class Tasks(commands.Cog):
             Note that Python stores references in lists -- hence, modifying embed after calling
             this function will modify embed_list if embed was added to embed_list.
             """
-            if hasattr(module, 'html_url'):
-                if hasattr(module, 'title'):
-                    field = f'[{module.title}]({module.html_url})'
-                else:
-                    field = f'[{module.name}]({module.html_url})'
+            if hasattr(module, 'title'):
+                field = module.title
             else:
-                if hasattr(module, 'title'):
-                    field = f'{module.title}'
-                else:
-                    field = f'{module.name}'
+                field = module.name
+            
+            if len(field) > MAX_IDENTIFIER_LENGTH:
+                field = f'{field[:MAX_IDENTIFIER_LENGTH - 3]}...'
+
+            if hasattr(module, 'html_url'):
+                field = f'[{field}]({module.html_url})'
             
             if isinstance(module, canvasapi.module.Module):
                 embed.add_field(name="Module", value=field, inline=False)
@@ -145,12 +149,6 @@ class Tasks(commands.Cog):
                         
                         embeds_to_send = []
 
-                        # TODO: in order of importance
-                        # 1. Prevent embed length exceeding 6000 chars
-                        # 2. Documentation
-                        # 3. Incorporate max_identifier_length
-
-                        max_identifier_length = 120
                         curr_embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
                         curr_num_fields = 0
 
