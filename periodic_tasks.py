@@ -155,14 +155,16 @@ class Tasks(commands.Cog):
                         with open(modules_file, 'w') as m:
                             for module in course.get_modules():
                                 if hasattr(module, 'name'):
+                                    temp = curr_num_fields
                                     curr_num_fields = handle_module(module, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
-                                    if curr_num_fields == 0:
+                                    if temp != curr_num_fields and curr_num_fields == 0:
                                         curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
                                     
                                     for item in module.get_module_items():
                                         if hasattr(item, 'title'):
+                                            temp = curr_num_fields
                                             curr_num_fields = handle_module_item(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
-                                            if curr_num_fields == 0:
+                                            if temp != curr_num_fields and curr_num_fields == 0:
                                                 curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
                         
                         if curr_num_fields:
