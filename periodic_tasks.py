@@ -134,36 +134,13 @@ class Tasks(commands.Cog):
         
         def handle_module(module, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
             """
-            Signature: (canvasapi.module.Module, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
+            Signature: (Union[canvasapi.module.Module, canvasapi.module.ModuleItem], TextIO, List[str], 
+            discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
 
-            Writes given module to modules_file. This function assumes modules_file has already been opened in write/append mode.
-
-            existing_modules contains contents of the pre-existing modules file (or is empty if the modules file has just been created)
-
-            This function updates curr_embed, curr_embed_num_fields, and embed_list depending on whether existing_modules already
-            knows about given module. 
-            
-            The function returns a tuple (curr_embed, curr_embed_num_fields) containing the updated values of curr_embed and curr_embed_num_fields.
-            
-            NOTE: changes to embed_list will persist outside this function, but changes to curr_embed and curr_embed_num_fields may not be 
-            reflected outside this function. The caller should update the values that were passed in to curr_embed and curr_embed_num_fields 
-            using the tuple returned by this function.
-            """
-            module_with_newline = module.name + '\n'
-            modules_file.write(module_with_newline)
-
-            if not module_with_newline in existing_modules:
-                embed_num_fields_tuple = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
-                curr_embed = embed_num_fields_tuple[0]
-                curr_embed_num_fields = embed_num_fields_tuple[1]
-            
-            return (curr_embed, curr_embed_num_fields)
-        
-        def handle_module_item(item, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
-            """
-            Signature: (canvasapi.module.ModuleItem, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
-
-            Writes given module item to modules_file. This function assumes modules_file has already been opened in write/append mode.
+            Writes given module or module item to modules_file. This function assumes that:
+            - modules_file has already been opened in write/append mode.
+            - module has the "name" attribute if it is an instance of canvasapi.module.Module.
+            - module has the "html_url" attribute or the "title" attribute if it is an instance of canvasapi.module.ModuleItem.
 
             existing_modules contains contents of the pre-existing modules file (or is empty if the modules file has just been created)
 
@@ -176,15 +153,18 @@ class Tasks(commands.Cog):
             reflected outside this function. The caller should update the values that were passed in to curr_embed and curr_embed_num_fields 
             using the tuple returned by this function.
             """
-            if hasattr(item, 'html_url'):
-                to_write = item.html_url + '\n'
+            if isinstance(module, canvasapi.module.Module):
+                to_write = module.name + '\n'
             else:
-                to_write = item.title + '\n'
+                if hasattr(module, 'html_url'):
+                    to_write = module.html_url + '\n'
+                else:
+                    to_write = module.title + '\n'
                 
             modules_file.write(to_write)
 
-            if to_write not in existing_modules:
-                embed_num_fields_tuple = update_embed(curr_embed, item, curr_embed_num_fields, embed_list)
+            if not to_write in existing_modules:
+                embed_num_fields_tuple = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
                 curr_embed = embed_num_fields_tuple[0]
                 curr_embed_num_fields = embed_num_fields_tuple[1]
             
@@ -224,7 +204,7 @@ class Tasks(commands.Cog):
                                     
                                     for item in module.get_module_items():
                                         if hasattr(item, 'title'):
-                                            embed_num_fields_tuple = handle_module_item(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
+                                            embed_num_fields_tuple = handle_module(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
                                             curr_embed = embed_num_fields_tuple[0]
                                             curr_num_fields = embed_num_fields_tuple[1]
                         
