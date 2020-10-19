@@ -22,6 +22,8 @@ MAX_IDENTIFIER_LENGTH = 100
 
 RED = 0xff0000
 
+EMBED_CHAR_LIMIT = 6000
+
 def setup(bot):
     bot.add_cog(Tasks(bot))
     print("Loaded Tasks cog", flush=True)
@@ -57,26 +59,15 @@ class Tasks(commands.Cog):
         - update COURSES_DIRECTORY/{course_id}/modules.txt with the modules we retrieved from Canvas
         """
         
-        def update_embed(embed, module, num_fields, embed_list):
+        def get_field_value(module):
             """
-            Signature: (discord.Embed, Union[canvasapi.module.Module, canvasapi.module.ModuleItem], int, List[discord.Embed]) -> Boolean
+            Signature: Union[canvasapi.module.Module, canvasapi.module.ModuleItem] -> str
 
-            Adds a field to embed containing a hyperlink to given Canvas module/module item. The hyperlink
-            is omitted if module does not have the html_url attribute -- only the module's name/title attribute is 
-            included in the field.
-
-            If the module's identifier (its name or title) has over MAX_IDENTIFIER_LENGTH characters, we truncate the identifier
-            and append an ellipsis (...) so that it has MAX_IDENTIFIER_LENGTH characters.
-
-            The embed object must have at most 24 fields. `num_fields` is the number of fields the embed object has. 
-            Note that this function does not (and cannot) update num_fields, since integers are immutable in Python.
-
-            The embed object is appended to embed_list if num_fields is 24.
-
-            This function returns True if the embed object is appended to embed_list. Otherwise, the function returns False.
-
-            Note that Python stores references in lists -- hence, modifying embed after calling
-            this function will modify embed_list if embed was added to embed_list.
+            This function returns a string that can be added to a Discord embed as a field's value. The returned
+            string contains the module's name/title attribute (depending on which one it has), as well
+            as a hyperlink to the module (if the module has the html_url attribute). If the module's name/title exceeds 
+            MAX_IDENTIFIER_LENGTH characters, we truncate it and append an ellipsis (...) so that the name/title has 
+            MAX_IDENTIFIER_LENGTH characters.
             """
             if hasattr(module, 'title'):
                 field = module.title
@@ -89,32 +80,101 @@ class Tasks(commands.Cog):
             if hasattr(module, 'html_url'):
                 field = f'[{field}]({module.html_url})'
             
-            if isinstance(module, canvasapi.module.Module):
-                embed.add_field(name="Module", value=field, inline=False)
-            else:
-                embed.add_field(name="Module Item", value=field, inline=False)
+            return field
+        
+        def update_embed(embed, module, num_fields, embed_list):
+            """
+            Signature: (discord.Embed, Union[canvasapi.module.Module, canvasapi.module.ModuleItem], int, List[discord.Embed]) -> (discord.Embed, int)
 
-            if num_fields == 24:
-                embed_list.append(embed)
-                return True
+            Adds a field to embed containing information about given module. The field includes the module's name or title,
+            as well as a hyperlink to the module if one exists.
+
+            If the module's identifier (its name or title) has over MAX_IDENTIFIER_LENGTH characters, we truncate the identifier
+            and append an ellipsis (...) so that it has MAX_IDENTIFIER_LENGTH characters.
+
+            The embed object that is passed in must have at most 24 fields. Use the parameter `num_fields` to specify the number 
+            of fields the embed object has.
+
+            The embed object is appended to embed_list in two cases:
+            - if adding the new field will cause the embed to exceed EMBED_CHAR_LIMIT characters in length, the embed is appended to embed_list first. 
+              Then, we create a new embed and add the field to the new embed.
+            - if the embed has 25 fields after adding the new field, we append embed to embed_list.
+
+            Note that Python stores references in lists -- hence, modifying the content of the embed variable after calling
+            this function will modify embed_list if embed was added to embed_list.
+
+            This function returns a tuple (embed, num_fields) containing the updated values of embed and num_fields.
             
-            return False
+            NOTE: changes to embed_list will persist outside this function, but changes to embed and num_fields 
+            may not be reflected outside this function. The caller should update (reassign) the values that were passed 
+            in to embed and num_fields using the tuple returned by this function. A reassignment of embed will not
+            change the contents of embed_list.
+            """
+            field_value = get_field_value(module)
+            
+            # Note: 11 is the length of the string "Module Item"
+            if 11 + len(field_value) + len(embed) > EMBED_CHAR_LIMIT:
+                embed_list.append(embed)
+                embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
+                num_fields = 0
+            
+            if isinstance(module, canvasapi.module.Module):
+                embed.add_field(name="Module", value=field_value, inline=False)
+            else:
+                embed.add_field(name="Module Item", value=field_value, inline=False)
+
+            num_fields += 1
+
+            if num_fields == 25:
+                embed_list.append(embed)
+                embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
+                num_fields = 0
+            
+            return (embed, num_fields)
         
         def handle_module(module, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
             """
-            Signature: (canvasapi.module.Module, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> int
+            Signature: (canvasapi.module.Module, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
+
+            Writes given module to modules_file. This function assumes modules_file has already been opened in write/append mode.
+
+            existing_modules contains contents of the pre-existing modules file (or is empty if the modules file has just been created)
+
+            This function updates curr_embed, curr_embed_num_fields, and embed_list depending on whether existing_modules already
+            knows about given module. 
+            
+            The function returns a tuple (curr_embed, curr_embed_num_fields) containing the updated values of curr_embed and curr_embed_num_fields.
+            
+            NOTE: changes to embed_list will persist outside this function, but changes to curr_embed and curr_embed_num_fields may not be 
+            reflected outside this function. The caller should update the values that were passed in to curr_embed and curr_embed_num_fields 
+            using the tuple returned by this function.
             """
             module_with_newline = module.name + '\n'
             modules_file.write(module_with_newline)
 
             if not module_with_newline in existing_modules:
-                embed_appended = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
-                return 0 if embed_appended else curr_embed_num_fields + 1
-            return curr_embed_num_fields
+                embed_num_fields_tuple = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
+                curr_embed = embed_num_fields_tuple[0]
+                curr_embed_num_fields = embed_num_fields_tuple[1]
+            
+            return (curr_embed, curr_embed_num_fields)
         
         def handle_module_item(item, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
             """
-            Signature: (canvasapi.module.ModuleItem, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> int
+            Signature: (canvasapi.module.ModuleItem, TextIO, List[str], discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
+
+            Writes given module item to modules_file. This function assumes modules_file has already been opened in write/append mode.
+
+            existing_modules contains contents of the pre-existing modules file (or is empty if the modules file has just been created)
+
+            This function updates curr_embed, curr_embed_num_fields, and embed_list depending on whether existing_modules already
+            knows about the given module item. 
+            
+            The function returns a tuple (curr_embed, curr_embed_num_fields) containing the updated values of curr_embed and curr_embed_num_fields.
+            
+            NOTE: changes to embed_list will persist outside this function, but changes to curr_embed and curr_embed_num_fields may not be 
+            reflected outside this function. The caller should update the values that were passed in to curr_embed and curr_embed_num_fields 
+            using the tuple returned by this function.
             """
             if hasattr(item, 'html_url'):
                 to_write = item.html_url + '\n'
@@ -122,10 +182,13 @@ class Tasks(commands.Cog):
                 to_write = item.title + '\n'
                 
             modules_file.write(to_write)
+
             if to_write not in existing_modules:
-                embed_appended = update_embed(curr_embed, item, curr_embed_num_fields, embed_list)
-                return 0 if embed_appended else curr_num_fields + 1
-            return curr_embed_num_fields
+                embed_num_fields_tuple = update_embed(curr_embed, item, curr_embed_num_fields, embed_list)
+                curr_embed = embed_num_fields_tuple[0]
+                curr_embed_num_fields = embed_num_fields_tuple[1]
+            
+            return (curr_embed, curr_embed_num_fields)
 
         if (os.path.exists(COURSES_DIRECTORY)):
             courses = [name for name in os.listdir(COURSES_DIRECTORY)]
@@ -155,17 +218,15 @@ class Tasks(commands.Cog):
                         with open(modules_file, 'w') as m:
                             for module in course.get_modules():
                                 if hasattr(module, 'name'):
-                                    temp = curr_num_fields
-                                    curr_num_fields = handle_module(module, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
-                                    if temp != curr_num_fields and curr_num_fields == 0:
-                                        curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
+                                    embed_num_fields_tuple = handle_module(module, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
+                                    curr_embed = embed_num_fields_tuple[0]
+                                    curr_num_fields = embed_num_fields_tuple[1]
                                     
                                     for item in module.get_module_items():
                                         if hasattr(item, 'title'):
-                                            temp = curr_num_fields
-                                            curr_num_fields = handle_module_item(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
-                                            if temp != curr_num_fields and curr_num_fields == 0:
-                                                curr_embed = discord.Embed(title=f"New modules for {course.name} (continued):", color=RED)
+                                            embed_num_fields_tuple = handle_module_item(item, m, existing_modules, curr_embed, curr_num_fields, embeds_to_send)
+                                            curr_embed = embed_num_fields_tuple[0]
+                                            curr_num_fields = embed_num_fields_tuple[1]
                         
                         if curr_num_fields:
                             embeds_to_send.append(curr_embed)
