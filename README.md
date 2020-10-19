@@ -30,3 +30,5 @@ in that course, the bot will notify you in the Discord channel where the command
     - Note: this bot only watches for new modules. The bot does *not* track updates to content within course modules, 
     so you will not receive a notification if the content in an existing course module is changed.
 - ```!track disable <course_id>``` stops tracking a Canvas course in the Discord channel where the command was typed.
+- ```!reload``` reloads the bot. This command also causes the bot to check Canvas.
+- ```!stop``` stops the bot. This command is only available to users with the "Bot Controller" role on Discord.
