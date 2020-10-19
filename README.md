@@ -5,7 +5,7 @@
 In this world of online learning, keeping track of everything that happens in all of your online courses is difficult. This Discord bot serves
 to reduce the time you spend checking for course updates by notifying you whenever a new course module is published on Canvas.
 
-This bot is built in Python using the discord.py API, CanvasAPI, and asyncio.
+This bot is built in Python using the [discord.py API](https://discordpy.readthedocs.io/en/latest/), [CanvasAPI](https://canvasapi.readthedocs.io/en/stable/), and the asyncio library.
 
 ## Installation
 
