@@ -100,6 +100,16 @@ class Main(commands.Cog):
                 await ctx.send("Unauthorized request.")
             except Exception:
                 await ctx.send(f'```\n{traceback.format_exc()}\n```')
+    
+    @commands.command(hidden=True)
+    async def update_courses(self, ctx):
+        """
+        Download and store the latest Canvas modules for all courses being tracked.
+
+        `!update_courses`
+        """
+        await periodic_tasks.check_canvas(self.bot)
+        await ctx.send("Courses updated!")
 
     async def store_channel_in_file(self, channel, file_path):
         """
