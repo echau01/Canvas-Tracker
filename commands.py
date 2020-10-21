@@ -12,6 +12,7 @@ class Bot_Management(commands.Cog):
         self.bot = bot
 
     @commands.command()
+    @commands.guild_only()
     async def reload(self, ctx):
         """
         Reloads extensions.
@@ -24,6 +25,7 @@ class Bot_Management(commands.Cog):
 
     @commands.command(hidden=True)
     @commands.has_role("Bot Controller")
+    @commands.guild_only()
     async def stop(self, ctx):
         """
         Stops the bot.
@@ -37,8 +39,10 @@ class Bot_Management(commands.Cog):
     async def on_command_error(self, ctx, error):
         if isinstance(error, commands.errors.MissingRole):
             await ctx.send("You do not have the required role.")
+        elif isinstance(error, commands.NoPrivateMessage):
+            await ctx.send("This command is disabled in private messages.")
         else:
-            await ctx.send(f"```\n{traceback.format_exception(type(error), error, error.__traceback__)}\n```")
+            await ctx.send(f"```\n{traceback.format_exception(type(error), error, error.__traceback__)}```")
 
 
 class Main(commands.Cog):
@@ -46,6 +50,7 @@ class Main(commands.Cog):
         self.bot = bot
 
     @commands.command()
+    @commands.guild_only()
     async def track(self, ctx, *args):
         """
         Configure the current text channel to receive an update when a course module is published on Canvas.
@@ -98,10 +103,9 @@ class Main(commands.Cog):
                 await ctx.send("The given course could not be found.")
             except canvasapi.exceptions.Unauthorized:
                 await ctx.send("Unauthorized request.")
-            except Exception:
-                await ctx.send(f'```\n{traceback.format_exc()}\n```')
     
     @commands.command(hidden=True)
+    @commands.guild_only()
     async def update_courses(self, ctx):
         """
         Download and store the latest Canvas modules for all courses being tracked.
