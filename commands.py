@@ -11,7 +11,8 @@ class Bot_Management(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.command(hidden=True)
+    @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def reload(self, ctx):
         """
@@ -24,7 +25,7 @@ class Bot_Management(commands.Cog):
         await ctx.send("Bot reloaded!")
 
     @commands.command(hidden=True)
-    @commands.has_role("Bot Controller")
+    @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def stop(self, ctx):
         """
@@ -37,8 +38,8 @@ class Bot_Management(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx, error):
-        if isinstance(error, commands.errors.MissingRole):
-            await ctx.send("You do not have the required role.")
+        if isinstance(error, commands.errors.MissingPermissions):
+            await ctx.send("You do not have the required permissions.")
         elif isinstance(error, commands.NoPrivateMessage):
             await ctx.send("This command is disabled in private messages.")
         else:
