@@ -42,8 +42,10 @@ class Bot_Management(commands.Cog):
         elif isinstance(error, commands.NoPrivateMessage):
             await ctx.send("This command is disabled in private messages.")
         else:
-            await ctx.send(f"```\n{traceback.format_exception(type(error), error, error.__traceback__)}```")
-
+            await ctx.send(f"An exception of type {error.__class__.__name__} occurred. The stacktrace has been written to the command line.")
+            print("\n====AN EXCEPTION OCCURRED====\n", flush=True)
+            print(''.join(traceback.format_exception(type(error), error, error.__traceback__)), flush=True)
+            print("\n====END OF STACKTRACE====\n", flush=True)
 
 class Main(commands.Cog):
     def __init__(self, bot):
