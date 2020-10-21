@@ -32,7 +32,7 @@ class Tasks(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tasks = []
-        self.tasks.append(asyncio.get_event_loop().create_task(self.check_canvas_hourly()))
+        self.tasks.append(bot.loop.create_task(self.check_canvas_hourly()))
     
     def cog_unload(self):
         for task in self.tasks:
