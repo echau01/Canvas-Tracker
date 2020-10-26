@@ -1,12 +1,17 @@
 import asyncio
 import os
-import util
+import traceback
+from typing import List, Set, TextIO, Tuple, Union
+
 import canvasapi
 from canvasapi import Canvas
+from canvasapi.module import Module, ModuleItem
 import discord
 from discord.ext import commands
+from discord.ext.commands import Bot
 from dotenv import load_dotenv
-import traceback
+
+import util
 
 load_dotenv()
 
@@ -50,7 +55,7 @@ class Tasks(commands.Cog):
             await check_canvas(self.bot)
             await asyncio.sleep(3600)
     
-async def check_canvas(bot):
+async def check_canvas(bot: Bot):
     """
     For every folder in COURSES_DIRECTORY we will:
     - get the modules for the Canvas course with ID that matches the folder name
@@ -59,10 +64,8 @@ async def check_canvas(bot):
     - update COURSES_DIRECTORY/{course_id}/modules.txt with the modules we retrieved from Canvas
     """
     
-    def get_field_value(module):
+    def get_field_value(module: Union[Module, ModuleItem]) -> str:
         """
-        Signature: Union[canvasapi.module.Module, canvasapi.module.ModuleItem] -> str
-
         This function returns a string that can be added to a Discord embed as a field's value. The returned
         string contains the module's name/title attribute (depending on which one it has), as well
         as a hyperlink to the module (if the module has the html_url attribute). If the module's name/title exceeds 
@@ -82,10 +85,9 @@ async def check_canvas(bot):
         
         return field
     
-    def update_embed(embed, module, num_fields, embed_list):
+    def update_embed(embed: discord.Embed, module: Union[Module, ModuleItem], num_fields: int, 
+                     embed_list: List[discord.Embed]) -> Tuple[discord.Embed, int]:
         """
-        Signature: (discord.Embed, Union[canvasapi.module.Module, canvasapi.module.ModuleItem], int, List[discord.Embed]) -> (discord.Embed, int)
-
         Adds a field to embed containing information about given module. The field includes the module's name or title,
         as well as a hyperlink to the module if one exists.
 
@@ -132,11 +134,9 @@ async def check_canvas(bot):
         
         return (embed, num_fields)
     
-    def handle_module(module, modules_file, existing_modules, curr_embed, curr_embed_num_fields, embed_list):
+    def handle_module(module: Union[Module, ModuleItem], modules_file: TextIO, existing_modules: Set[str], curr_embed: discord.Embed, 
+                      curr_embed_num_fields: int, embed_list: List[discord.Embed]) -> Tuple[discord.Embed, int]:
         """
-        Signature: (Union[canvasapi.module.Module, canvasapi.module.ModuleItem], TextIO, List[str], 
-        discord.Embed, int, List[discord.Embed]) -> Tuple[discord.Embed, int]
-
         Writes given module or module item to modules_file. This function assumes that:
         - modules_file has already been opened in write/append mode.
         - module has the "name" attribute if it is an instance of canvasapi.module.Module.

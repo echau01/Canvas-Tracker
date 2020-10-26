@@ -1,14 +1,18 @@
+import os
+import shutil
 import traceback
-import util
-from discord.ext import commands
+
 import canvasapi
 from canvasapi import Canvas
+import discord
+from discord.ext import commands
+from discord.ext.commands import Bot
+
 import periodic_tasks
-import shutil
-import os
+import util
 
 class Bot_Management(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @commands.command(hidden=True)
@@ -49,7 +53,7 @@ class Bot_Management(commands.Cog):
             print("\n====END OF STACKTRACE====\n", flush=True)
 
 class Main(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot):
         self.bot = bot
 
     @commands.command()
@@ -118,9 +122,9 @@ class Main(commands.Cog):
         await periodic_tasks.check_canvas(self.bot)
         await ctx.send("Courses updated!")
 
-    async def store_channel_in_file(self, channel, file_path):
+    async def store_channel_in_file(self, channel: discord.TextChannel, file_path: str):
         """
-        Adds given text channel's id to file with given path (as str) if the channel id is 
+        Adds given text channel's id to file with given path if the channel id is 
         not already contained in the file. Returns True if the channel id was added to the file. 
         Returns False if the channel id was already contained in the file.
         """
@@ -145,9 +149,9 @@ class Main(commands.Cog):
 
         return True
 
-    async def delete_channel_from_file(self, channel, file_path):
+    async def delete_channel_from_file(self, channel: discord.TextChannel, file_path: str):
         """
-        Removes given text channel's id from file with given path (as str) if the channel id
+        Removes given text channel's id from file with given path if the channel id
         is contained in the file. Returns True if the channel id was deleted to the file. 
         Returns False if the channel id could not be found in the file.
         """
