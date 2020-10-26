@@ -142,7 +142,7 @@ async def check_canvas(bot: Bot):
         - module has the "name" attribute if it is an instance of canvasapi.module.Module.
         - module has the "html_url" attribute or the "title" attribute if it is an instance of canvasapi.module.ModuleItem.
 
-        existing_modules contains contents of the pre-existing modules file (or is empty if the modules file has just been created)
+        existing_modules contains all of the contents of the pre-existing modules file (or is empty if the modules file has just been created)
 
         This function updates curr_embed, curr_embed_num_fields, and embed_list depending on whether existing_modules already
         knows about the given module item. 
@@ -154,14 +154,14 @@ async def check_canvas(bot: Bot):
         using the tuple returned by this function.
         """
         if isinstance(module, canvasapi.module.Module):
-            to_write = module.name + '\n'
+            to_write = module.name
         else:
             if hasattr(module, 'html_url'):
-                to_write = module.html_url + '\n'
+                to_write = module.html_url
             else:
-                to_write = module.title + '\n'
+                to_write = module.title
             
-        modules_file.write(to_write)
+        modules_file.write(to_write + '\n')
 
         if not to_write in existing_modules:
             embed_num_fields_tuple = update_embed(curr_embed, module, curr_embed_num_fields, embed_list)
@@ -188,7 +188,7 @@ async def check_canvas(bot: Bot):
                     util.create_file_if_not_exists(watchers_file)
 
                     with open(modules_file, 'r') as m:
-                        existing_modules = set(m.readlines())
+                        existing_modules = set(m.read().splitlines())
                     
                     embeds_to_send = []
 
