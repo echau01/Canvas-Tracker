@@ -172,20 +172,19 @@ async def check_canvas(bot: Bot):
                     
                     embeds_to_send = []
 
-                    curr_embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
-                    curr_num_fields = 0
+                    embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
 
                     with open(modules_file, 'w') as m:
                         for module in course.get_modules():
                             if hasattr(module, 'name'):
-                                handle_module(module, m, existing_modules, curr_embed, embeds_to_send)
+                                handle_module(module, m, existing_modules, embed, embeds_to_send)
                                 
                                 for item in module.get_module_items():
                                     if hasattr(item, 'title'):
-                                        handle_module(item, m, existing_modules, curr_embed, embeds_to_send)
+                                        handle_module(item, m, existing_modules, embed, embeds_to_send)
                     
-                    if curr_num_fields:
-                        embeds_to_send.append(curr_embed)
+                    if len(embed.fields) != 0:
+                        embeds_to_send.append(embed)
                     
                     if embeds_to_send:
                         with open(watchers_file, 'r') as w:
