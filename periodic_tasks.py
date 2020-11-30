@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import os
+import shutil
 import traceback
 from typing import List, Set, TextIO, Tuple, Union
 
@@ -157,10 +158,11 @@ async def check_canvas(bot: Bot):
         for course_id_str in courses:
             if course_id_str.isdigit():
                 course_id = int(course_id_str)
+                modules_file = f'{COURSES_DIRECTORY}/{course_id}/modules.txt'
+                watchers_file = f'{COURSES_DIRECTORY}/{course_id}/watchers.txt'
+                
                 try:
                     course = CANVAS_INSTANCE.get_course(course_id)
-                    modules_file = f'{COURSES_DIRECTORY}/{course_id}/modules.txt'
-                    watchers_file = f'{COURSES_DIRECTORY}/{course_id}/watchers.txt'
                     
                     print(f'Downloading modules for {course.name}', flush=True)
 
@@ -192,6 +194,13 @@ async def check_canvas(bot: Bot):
                                 channel = bot.get_channel(int(channel_id.rstrip()))
                                 for element in embeds_to_send:
                                     await channel.send(embed=element)
-
+                
+                except canvasapi.exceptions.InvalidAccessToken:
+                    # Delete course directory if we no longer have permission to access the Canvas course.
+                    with open(watchers_file, 'r') as w:
+                        for channel_id in w:
+                            channel = bot.get_channel(int(channel_id.rstrip()))
+                            await channel.send(f"Removing course with ID {course_id} from courses being tracked; course access denied.")
+                    shutil.rmtree(f'{COURSES_DIRECTORY}/{course_id}')
                 except Exception:
                     print(traceback.format_exc(), flush=True)
