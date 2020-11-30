@@ -123,7 +123,7 @@ async def check_canvas(bot: Bot):
             embed.title = f"New modules found for {course.name} (continued):"
     
     def handle_module(module: Union[Module, ModuleItem], modules_file: TextIO, existing_file_contents: Set[str], 
-                      curr_embed: discord.Embed, embed_list: List[discord.Embed]):
+                      embed: discord.Embed, embed_list: List[discord.Embed]):
         """
         Writes given module or module item to modules_file. This function assumes that:
         - modules_file has already been opened in write/append mode.
@@ -133,7 +133,7 @@ async def check_canvas(bot: Bot):
         existing_file_contents contains all of the contents of the pre-existing modules file (or is empty 
         if the modules file has just been created).
 
-        This function updates curr_embed and embed_list depending on whether existing_file_contents contains the
+        This function updates embed and embed_list depending on whether existing_file_contents contains the
         given module.
         
         NOTE: changes to embed and embed_list will persist outside this function.
@@ -149,7 +149,23 @@ async def check_canvas(bot: Bot):
         modules_file.write(to_write + '\n')
 
         if not to_write in existing_modules:
-            update_embed(curr_embed, module, embed_list)
+            update_embed(embed, module, embed_list)
+    
+    async def send_embeds(channel_ids_file: TextIO, embed_list: List[discord.Embed]):
+        """
+        Sends all embeds in embed_list to all valid Discord text channels in channel_ids_file.
+        We remove any line in channel_ids_file that is not a valid Discord text channel ID.
+        """
+        with open(channel_ids_file, 'r') as f:
+            channel_ids = f.read().splitlines()
+        
+        with open(channel_ids_file, 'w') as f:
+            for channel_id in channel_ids:
+                channel = bot.get_channel(int(channel_id))
+                if channel:
+                    f.write(channel_id + '\n')
+                    for element in embeds_to_send:
+                        await channel.send(embed=element)
 
     if (os.path.exists(COURSES_DIRECTORY)):
         courses = [name for name in os.listdir(COURSES_DIRECTORY)]
@@ -188,19 +204,15 @@ async def check_canvas(bot: Bot):
                     if len(embed.fields) != 0:
                         embeds_to_send.append(embed)
                     
-                    if embeds_to_send:
-                        with open(watchers_file, 'r') as w:
-                            for channel_id in w:
-                                channel = bot.get_channel(int(channel_id.rstrip()))
-                                for element in embeds_to_send:
-                                    await channel.send(embed=element)
+                    await send_embeds(watchers_file, embeds_to_send)
                 
                 except canvasapi.exceptions.InvalidAccessToken:
                     # Delete course directory if we no longer have permission to access the Canvas course.
                     with open(watchers_file, 'r') as w:
                         for channel_id in w:
                             channel = bot.get_channel(int(channel_id.rstrip()))
-                            await channel.send(f"Removing course with ID {course_id} from courses being tracked; course access denied.")
+                            if channel:
+                                await channel.send(f"Removing course with ID {course_id} from courses being tracked; course access denied.")
                     shutil.rmtree(f'{COURSES_DIRECTORY}/{course_id}')
                 except Exception:
                     print(traceback.format_exc(), flush=True)
