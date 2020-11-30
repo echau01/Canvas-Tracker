@@ -151,21 +151,32 @@ async def check_canvas(bot: Bot):
         if not to_write in existing_modules:
             update_embed(embed, module, embed_list)
     
-    async def send_embeds(channel_ids_file: TextIO, embed_list: List[discord.Embed]):
+    async def send_embeds(course_directory: str, embed_list: List[discord.Embed]):
         """
-        Sends all embeds in embed_list to all valid Discord text channels in channel_ids_file.
-        We remove any line in channel_ids_file that is not a valid Discord text channel ID.
+        Sends all embeds in embed_list to all valid Discord text channels listed in the watchers
+        file inside the given course directory.
+
+        We remove any line in the watchers file that is not a valid Discord text channel ID. If
+        the watchers file does not contain any valid text channel IDs, we also delete the course directory
+        since the course has no valid "watchers".
+        
+        This function assumes that the given directory actually contains a watchers file.
         """
-        with open(channel_ids_file, 'r') as f:
+        watchers_file = f'{course_directory}/watchers.txt'
+        
+        with open(watchers_file, 'r') as f:
             channel_ids = f.read().splitlines()
         
-        with open(channel_ids_file, 'w') as f:
+        with open(watchers_file, 'w') as f:
             for channel_id in channel_ids:
                 channel = bot.get_channel(int(channel_id))
                 if channel:
                     f.write(channel_id + '\n')
                     for element in embeds_to_send:
                         await channel.send(embed=element)
+        
+        if os.stat(watchers_file).st_size == 0:
+            shutil.rmtree(course_directory)
 
     if (os.path.exists(COURSES_DIRECTORY)):
         courses = [name for name in os.listdir(COURSES_DIRECTORY)]
@@ -174,8 +185,9 @@ async def check_canvas(bot: Bot):
         for course_id_str in courses:
             if course_id_str.isdigit():
                 course_id = int(course_id_str)
-                modules_file = f'{COURSES_DIRECTORY}/{course_id}/modules.txt'
-                watchers_file = f'{COURSES_DIRECTORY}/{course_id}/watchers.txt'
+                course_dir = f'{COURSES_DIRECTORY}/{course_id}'
+                modules_file = f'{course_dir}/modules.txt'
+                watchers_file = f'{course_dir}/watchers.txt'
                 
                 try:
                     course = CANVAS_INSTANCE.get_course(course_id)
@@ -204,15 +216,16 @@ async def check_canvas(bot: Bot):
                     if len(embed.fields) != 0:
                         embeds_to_send.append(embed)
                     
-                    await send_embeds(watchers_file, embeds_to_send)
+                    await send_embeds(course_dir, embeds_to_send)
                 
                 except canvasapi.exceptions.InvalidAccessToken:
-                    # Delete course directory if we no longer have permission to access the Canvas course.
                     with open(watchers_file, 'r') as w:
                         for channel_id in w:
                             channel = bot.get_channel(int(channel_id.rstrip()))
                             if channel:
                                 await channel.send(f"Removing course with ID {course_id} from courses being tracked; course access denied.")
-                    shutil.rmtree(f'{COURSES_DIRECTORY}/{course_id}')
+
+                    # Delete course directory if we no longer have permission to access the Canvas course.
+                    shutil.rmtree(course_dir)
                 except Exception:
                     print(traceback.format_exc(), flush=True)
