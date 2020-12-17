@@ -46,7 +46,7 @@ class Bot_Management(commands.Cog):
             await ctx.send("You do not have the required permissions.")
         elif isinstance(error, commands.NoPrivateMessage):
             await ctx.send("This command is disabled in private messages.")
-        else:
+        elif not isinstance(error, commands.CommandNotFound):
             await ctx.send(f"An exception of type {error.__class__.__name__} occurred. The stacktrace has been written to the command line.")
             print("\n====AN EXCEPTION OCCURRED====\n", flush=True)
             print(''.join(traceback.format_exception(type(error), error, error.__traceback__)), flush=True)
