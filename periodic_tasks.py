@@ -52,6 +52,7 @@ class Tasks(commands.Cog):
         names of the courses' modules since the last hour are sent to all Discord channels tracking 
         those courses.
         """
+
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
             await check_canvas(self.bot)
@@ -74,6 +75,7 @@ async def check_canvas(bot: Bot):
         MAX_IDENTIFIER_LENGTH characters, we truncate it and append an ellipsis (...) so that the name/title has exactly
         MAX_IDENTIFIER_LENGTH characters.
         """
+
         if hasattr(module, 'title'):
             field = module.title
         else:
@@ -104,6 +106,7 @@ async def check_canvas(bot: Bot):
         
         NOTE: changes to embed and embed_list will persist outside this function.
         """
+
         field_value = get_field_value(module)
         
         # Note: 11 is the length of the string "Module Item"
@@ -138,6 +141,7 @@ async def check_canvas(bot: Bot):
         
         NOTE: changes to embed and embed_list will persist outside this function.
         """
+
         if isinstance(module, canvasapi.module.Module):
             to_write = module.name
         else:
@@ -162,6 +166,7 @@ async def check_canvas(bot: Bot):
         
         This function assumes that the given directory actually contains a watchers file.
         """
+        
         watchers_file = f'{course_directory}/watchers.txt'
         
         with open(watchers_file, 'r') as f:

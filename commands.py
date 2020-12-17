@@ -20,10 +20,11 @@ class Bot_Management(commands.Cog):
     @commands.guild_only()
     async def reload(self, ctx):
         """
-        Reloads extensions.
-
         `!reload`
+
+        Reload the bot and its extensions.
         """
+        
         self.bot.reload_extension("commands")
         self.bot.reload_extension("periodic_tasks")
         await ctx.send("Bot reloaded!")
@@ -33,10 +34,11 @@ class Bot_Management(commands.Cog):
     @commands.guild_only()
     async def stop(self, ctx):
         """
-        Stops the bot.
-
         `!stop`
+
+        Stops the bot.
         """
+
         await ctx.send("Shutting down. Goodbye.")
         await self.bot.close()
 
@@ -60,9 +62,9 @@ class Main(commands.Cog):
     @commands.guild_only()
     async def track(self, ctx, *args):
         """
-        Configure the current text channel to receive an update when a course module is published on Canvas.
-
         `!track <enable | disable> <course_id>`
+
+        Configure the current text channel to receive an update when a course module is published on Canvas.
         """
 
         if len(args) != 2:
@@ -115,10 +117,11 @@ class Main(commands.Cog):
     @commands.guild_only()
     async def update_courses(self, ctx):
         """
-        Download and store the latest Canvas modules for all courses being tracked.
-
         `!update_courses`
+
+        Download and store the latest Canvas modules for all courses being tracked.
         """
+        
         await periodic_tasks.check_canvas(self.bot)
         await ctx.send("Courses updated!")
 
@@ -172,8 +175,6 @@ class Main(commands.Cog):
                     id_found = True
 
         return id_found
-
-# Required function for any extension
 
 def setup(bot):
     bot.add_cog(Main(bot))
