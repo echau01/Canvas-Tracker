@@ -9,6 +9,7 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 
+
 @bot.event
 async def on_ready():
     print(f'{bot.user} is ready!', flush=True)

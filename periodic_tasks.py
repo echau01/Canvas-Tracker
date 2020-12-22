@@ -3,9 +3,9 @@ import copy
 import os
 import shutil
 import traceback
-from typing import List, Set, TextIO, Tuple, Union
+from typing import List, Set, TextIO, Union
 
-import canvasapi
+import canvasapi.exceptions
 from canvasapi import Canvas
 from canvasapi.module import Module, ModuleItem
 import discord
@@ -31,9 +31,11 @@ RED = 0xff0000
 
 EMBED_CHAR_LIMIT = 6000
 
+
 def setup(bot):
     bot.add_cog(Tasks(bot))
     print("Loaded Tasks cog", flush=True)
+
 
 class Tasks(commands.Cog):
     def __init__(self, bot):
@@ -57,7 +59,8 @@ class Tasks(commands.Cog):
         while not self.bot.is_closed():
             await check_canvas(self.bot)
             await asyncio.sleep(3600)
-    
+
+
 async def check_canvas(bot: Bot):
     """
     For every folder in COURSES_DIRECTORY we will:
@@ -115,7 +118,7 @@ async def check_canvas(bot: Bot):
             embed.clear_fields()
             embed.title = f"New modules found for {course.name} (continued):"
         
-        if isinstance(module, canvasapi.module.Module):
+        if isinstance(module, Module):
             embed.add_field(name="Module", value=field_value, inline=False)
         else:
             embed.add_field(name="Module Item", value=field_value, inline=False)
@@ -130,8 +133,8 @@ async def check_canvas(bot: Bot):
         """
         Writes given module or module item to modules_file. This function assumes that:
         - modules_file has already been opened in write/append mode.
-        - module has the "name" attribute if it is an instance of canvasapi.module.Module.
-        - module has the "html_url" attribute or the "title" attribute if it is an instance of canvasapi.module.ModuleItem.
+        - module has the "name" attribute if it is an instance of Module.
+        - module has the "html_url" attribute or the "title" attribute if it is an instance of ModuleItem.
 
         existing_file_contents contains all of the contents of the pre-existing modules file (or is empty 
         if the modules file has just been created).
@@ -142,7 +145,7 @@ async def check_canvas(bot: Bot):
         NOTE: changes to embed and embed_list will persist outside this function.
         """
 
-        if isinstance(module, canvasapi.module.Module):
+        if isinstance(module, Module):
             to_write = module.name
         else:
             if hasattr(module, 'html_url'):
@@ -152,7 +155,7 @@ async def check_canvas(bot: Bot):
             
         modules_file.write(to_write + '\n')
 
-        if not to_write in existing_modules:
+        if to_write not in existing_file_contents:
             update_embed(embed, module, embed_list)
     
     async def send_embeds(course_directory: str, embed_list: List[discord.Embed]):
@@ -177,13 +180,13 @@ async def check_canvas(bot: Bot):
                 channel = bot.get_channel(int(channel_id))
                 if channel:
                     f.write(channel_id + '\n')
-                    for element in embeds_to_send:
+                    for element in embed_list:
                         await channel.send(embed=element)
         
         if os.stat(watchers_file).st_size == 0:
             shutil.rmtree(course_directory)
 
-    if (os.path.exists(COURSES_DIRECTORY)):
+    if os.path.exists(COURSES_DIRECTORY):
         courses = [name for name in os.listdir(COURSES_DIRECTORY)]
 
         # each folder in the courses directory is named with a course id (which is a positive integer)
@@ -228,7 +231,8 @@ async def check_canvas(bot: Bot):
                         for channel_id in w:
                             channel = bot.get_channel(int(channel_id.rstrip()))
                             if channel:
-                                await channel.send(f"Removing course with ID {course_id} from courses being tracked; course access denied.")
+                                await channel.send(f"Removing course with ID {course_id} from courses being tracked; "
+                                                   f"course access denied.")
 
                     # Delete course directory if we no longer have permission to access the Canvas course.
                     shutil.rmtree(course_dir)

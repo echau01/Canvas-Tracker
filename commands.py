@@ -3,7 +3,7 @@ import shutil
 import traceback
 
 import canvasapi
-from canvasapi import Canvas
+import canvasapi.exceptions
 import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
@@ -11,7 +11,8 @@ from discord.ext.commands import Bot
 import periodic_tasks
 import util
 
-class Bot_Management(commands.Cog):
+
+class BotManagement(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
@@ -49,10 +50,12 @@ class Bot_Management(commands.Cog):
         elif isinstance(error, commands.NoPrivateMessage):
             await ctx.send("This command is disabled in private messages.")
         elif not isinstance(error, commands.CommandNotFound):
-            await ctx.send(f"An exception of type {error.__class__.__name__} occurred. The stacktrace has been written to the command line.")
+            await ctx.send(f"An exception of type {error.__class__.__name__} occurred. The stacktrace has been "
+                           f"written to the command line.")
             print("\n====AN EXCEPTION OCCURRED====\n", flush=True)
             print(''.join(traceback.format_exception(type(error), error, error.__traceback__)), flush=True)
             print("\n====END OF STACKTRACE====\n", flush=True)
+
 
 class Main(commands.Cog):
     def __init__(self, bot: Bot):
@@ -125,7 +128,8 @@ class Main(commands.Cog):
         await periodic_tasks.check_canvas(self.bot)
         await ctx.send("Courses updated!")
 
-    async def store_channel_in_file(self, channel: discord.TextChannel, file_path: str):
+    @staticmethod
+    async def store_channel_in_file(channel: discord.TextChannel, file_path: str):
         """
         Adds given text channel's id to file with given path if the channel id is 
         not already contained in the file. Returns True if the channel id was added to the file. 
@@ -152,7 +156,8 @@ class Main(commands.Cog):
 
         return True
 
-    async def delete_channel_from_file(self, channel: discord.TextChannel, file_path: str):
+    @staticmethod
+    async def delete_channel_from_file(channel: discord.TextChannel, file_path: str):
         """
         Removes given text channel's id from file with given path if the channel id
         is contained in the file. Returns True if the channel id was deleted to the file. 
@@ -176,8 +181,9 @@ class Main(commands.Cog):
 
         return id_found
 
+
 def setup(bot):
     bot.add_cog(Main(bot))
     print("Loaded Main cog", flush=True)
-    bot.add_cog(Bot_Management(bot))
-    print("Loaded Bot_Management cog", flush=True)
+    bot.add_cog(BotManagement(bot))
+    print("Loaded BotManagement cog", flush=True)
