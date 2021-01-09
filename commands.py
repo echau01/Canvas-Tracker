@@ -54,7 +54,7 @@ class BotManagement(commands.Cog):
             await ctx.send(f"An exception of type {error.__class__.__name__} occurred. The stacktrace has been "
                            f"written to the command line.")
             print("\n====AN EXCEPTION OCCURRED====\n", flush=True)
-            print(''.join(traceback.format_exception(type(error), error, error.__traceback__)), flush=True)
+            print("".join(traceback.format_exception(type(error), error, error.__traceback__)), flush=True)
             print("\n====END OF STACKTRACE====\n", flush=True)
 
 
@@ -73,38 +73,38 @@ class Main(commands.Cog):
 
         if len(args) != 2:
             await ctx.send("Usage: `!track <enable | disable> <course_id>`")
-        elif args[0] != 'enable' and args[0] != 'disable':
+        elif args[0] != "enable" and args[0] != "disable":
             await ctx.send("Usage: `!track <enable | disable> <course_id>`")
         else:
-            modules_file = f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/modules.txt'
-            watchers_file = f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/watchers.txt'
+            modules_file = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/modules.txt"
+            watchers_file = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/watchers.txt"
 
             try:
                 course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
 
-                if args[0] == 'enable':
+                if args[0] == "enable":
                     # The watchers file contains all the channels watching the course
                     added = await self.store_channel_in_file(ctx.channel, watchers_file)
                     util.create_file(modules_file)
 
                     if added:
-                        await ctx.send(f'This channel is now tracking {course.name}.')
+                        await ctx.send(f"This channel is now tracking {course.name}.")
                         
                         # We will only update the modules if modules_file is empty.
                         if os.stat(modules_file).st_size == 0:
                             CanvasUtil.write_modules(modules_file, CanvasUtil.get_modules(course))
                     else:
-                        await ctx.send(f'This channel is already tracking {course.name}.')
-                else:   # this is the case where args[0] is 'disable'
+                        await ctx.send(f"This channel is already tracking {course.name}.")
+                else:   # this is the case where args[0] is "disable"
                     deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
                     
                     if os.stat(watchers_file).st_size == 0:
-                        shutil.rmtree(f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}')
+                        shutil.rmtree(f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}")
 
                     if deleted:
-                        await ctx.send(f'This channel is no longer tracking {course.name}.')
+                        await ctx.send(f"This channel is no longer tracking {course.name}.")
                     else:
-                        await ctx.send(f'This channel is already not tracking {course.name}.')
+                        await ctx.send(f"This channel is already not tracking {course.name}.")
 
             except canvasapi.exceptions.ResourceDoesNotExist:
                 await ctx.send("The given course could not be found.")
@@ -134,7 +134,7 @@ class Main(commands.Cog):
 
         util.create_file(file_path)
 
-        with open(file_path, "a+") as f:
+        with open(file_path, 'a+') as f:
             # Start reading from the beginning of the file. Note: file *writes*
             # will happen at the end of the file no matter what.
             f.seek(0)
@@ -142,7 +142,7 @@ class Main(commands.Cog):
             # The \n has to be here because:
             # - the lines in the file include the \n character at the end
             # - f.write(str) does not insert a new line after writing
-            id_to_add = str(channel.id) + "\n"
+            id_to_add = f"{channel.id}\n"
 
             for channel_id in f:
                 if channel_id == id_to_add:
@@ -162,13 +162,13 @@ class Main(commands.Cog):
 
         util.create_file(file_path)
 
-        with open(file_path, "r") as f:
+        with open(file_path, 'r') as f:
             channel_ids = f.readlines()
 
-        id_to_remove = str(channel.id) + "\n"
+        id_to_remove = f"{channel.id}\n"
         id_found = False
 
-        with open(file_path, "w") as f:
+        with open(file_path, 'w') as f:
             for channel_id in channel_ids:
                 if channel_id != id_to_remove:
                     f.write(channel_id)

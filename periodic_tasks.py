@@ -22,7 +22,7 @@ load_dotenv()
 COURSES_DIRECTORY = "./data/courses"
 
 CANVAS_URL = "https://canvas.ubc.ca/"
-CANVAS_TOKEN = os.getenv('CANVAS_TOKEN')
+CANVAS_TOKEN = os.getenv("CANVAS_TOKEN")
 CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN)
 
 # Module names and ModuleItem titles are truncated to this length
@@ -84,16 +84,16 @@ async def check_canvas(bot: Bot):
         MAX_IDENTIFIER_LENGTH characters.
         """
 
-        if hasattr(module, 'title'):
+        if hasattr(module, "title"):
             field = module.title
         else:
             field = module.name
         
         if len(field) > MAX_IDENTIFIER_LENGTH:
-            field = f'{field[:MAX_IDENTIFIER_LENGTH - 3]}...'
+            field = f"{field[:MAX_IDENTIFIER_LENGTH - 3]}..."
 
-        if hasattr(module, 'html_url'):
-            field = f'[{field}]({module.html_url})'
+        if hasattr(module, "html_url"):
+            field = f"[{field}]({module.html_url})"
         
         return field
     
@@ -162,17 +162,17 @@ async def check_canvas(bot: Bot):
         This function assumes that the given directory actually contains a watchers file.
         """
         
-        watchers_file = f'{course_directory}/watchers.txt'
+        watchers_file = f"{course_directory}/watchers.txt"
         
-        with open(watchers_file, 'r') as f:
+        with open(watchers_file, "r") as f:
             channel_ids = f.read().splitlines()
         
-        with open(watchers_file, 'w') as f:
+        with open(watchers_file, "w") as f:
             for channel_id in channel_ids:
                 channel = bot.get_channel(int(channel_id))
 
                 if channel:
-                    f.write(channel_id + '\n')
+                    f.write(channel_id + "\n")
 
                     for element in embed_list:
                         await channel.send(embed=element)
@@ -187,14 +187,14 @@ async def check_canvas(bot: Bot):
         for course_id_str in courses:
             if course_id_str.isdigit():
                 course_id = int(course_id_str)
-                course_dir = f'{COURSES_DIRECTORY}/{course_id}'
-                modules_file = f'{course_dir}/modules.txt'
-                watchers_file = f'{course_dir}/watchers.txt'
+                course_dir = f"{COURSES_DIRECTORY}/{course_id}"
+                modules_file = f"{course_dir}/modules.txt"
+                watchers_file = f"{course_dir}/watchers.txt"
                 
                 try:
                     course = CANVAS_INSTANCE.get_course(course_id)
                     
-                    print(f'Downloading modules for {course.name}', flush=True)
+                    print(f"Downloading modules for {course.name}", flush=True)
 
                     util.create_file(modules_file)
                     util.create_file(watchers_file)

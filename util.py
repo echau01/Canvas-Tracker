@@ -41,6 +41,6 @@ class CanvasUtil:
         Stores the IDs of all modules in file with given path.
         """
 
-        with open(file_path, "w") as f:
+        with open(file_path, 'w') as f:
             for module in modules:
                 f.write(f"{module.id}\n")
