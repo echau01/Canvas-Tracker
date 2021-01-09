@@ -3,7 +3,7 @@ import copy
 import os
 import shutil
 import traceback
-from typing import List, Set, TextIO, Union
+from typing import List, Union
 
 import canvasapi.exceptions
 from canvasapi import Canvas
@@ -14,6 +14,7 @@ from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
 import util
+from util import CanvasUtil
 
 load_dotenv()
 
@@ -66,8 +67,12 @@ async def check_canvas(bot: Bot):
     For every folder in COURSES_DIRECTORY we will:
     - get the modules for the Canvas course with ID that matches the folder name
     - compare the modules we retrieved with the modules found in COURSES_DIRECTORY/{course_id}/modules.txt
-    - send the names of any modules not in the file to all channels in COURSES_DIRECTORY/{course_id}/watchers.txt
+    - use the given bot to send the names of any modules not in the above file to all channels in
+    COURSES_DIRECTORY/{course_id}/watchers.txt
     - update COURSES_DIRECTORY/{course_id}/modules.txt with the modules we retrieved from Canvas
+
+    NOTE: the Canvas API distinguishes between a Module and a ModuleItem. In our documentation, though,
+    the word "module" can refer to both; we do not distinguish between the two types.
     """
     
     def get_field_value(module: Union[Module, ModuleItem]) -> str:
@@ -97,8 +102,8 @@ async def check_canvas(bot: Bot):
         Adds a field to embed containing information about given module. The field includes the module's name or title,
         as well as a hyperlink to the module if one exists.
 
-        If the module's identifier (its name or title) has over MAX_IDENTIFIER_LENGTH characters, we truncate the identifier
-        and append an ellipsis (...) so that the length does not exceed the maximum.
+        If the module's identifier (its name or title) has over MAX_IDENTIFIER_LENGTH characters, we truncate the
+        identifier and append an ellipsis (...) so that the length does not exceed the maximum.
 
         The embed object that is passed in must have at most 24 fields.
 
@@ -127,36 +132,23 @@ async def check_canvas(bot: Bot):
             embed_list.append(copy.deepcopy(embed))
             embed.clear_fields()
             embed.title = f"New modules found for {course.name} (continued):"
-    
-    def handle_module(module: Union[Module, ModuleItem], modules_file: TextIO, existing_file_contents: Set[str], 
-                      embed: discord.Embed, embed_list: List[discord.Embed]):
+
+    def get_embeds(modules: List[Union[Module, ModuleItem]]) -> List[discord.Embed]:
         """
-        Writes given module or module item to modules_file. This function assumes that:
-        - modules_file has already been opened in write/append mode.
-        - module has the "name" attribute if it is an instance of Module.
-        - module has the "html_url" attribute or the "title" attribute if it is an instance of ModuleItem.
-
-        existing_file_contents contains all of the contents of the pre-existing modules file (or is empty 
-        if the modules file has just been created).
-
-        This function updates embed and embed_list depending on whether existing_file_contents contains the
-        given module.
-        
-        NOTE: changes to embed and embed_list will persist outside this function.
+        Returns a list of Discord embeds to send to live channels.
         """
 
-        if isinstance(module, Module):
-            to_write = module.name
-        else:
-            if hasattr(module, 'html_url'):
-                to_write = module.html_url
-            else:
-                to_write = module.title
-            
-        modules_file.write(to_write + '\n')
+        embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
 
-        if to_write not in existing_file_contents:
+        embed_list = []
+
+        for module in modules:
             update_embed(embed, module, embed_list)
+
+        if len(embed.fields) != 0:
+            embed_list.append(embed)
+
+        return embed_list
     
     async def send_embeds(course_directory: str, embed_list: List[discord.Embed]):
         """
@@ -178,8 +170,10 @@ async def check_canvas(bot: Bot):
         with open(watchers_file, 'w') as f:
             for channel_id in channel_ids:
                 channel = bot.get_channel(int(channel_id))
+
                 if channel:
                     f.write(channel_id + '\n')
+
                     for element in embed_list:
                         await channel.send(embed=element)
         
@@ -202,39 +196,30 @@ async def check_canvas(bot: Bot):
                     
                     print(f'Downloading modules for {course.name}', flush=True)
 
-                    util.create_file_if_not_exists(modules_file)
-                    util.create_file_if_not_exists(watchers_file)
+                    util.create_file(modules_file)
+                    util.create_file(watchers_file)
 
                     with open(modules_file, 'r') as m:
                         existing_modules = set(m.read().splitlines())
-                    
-                    embeds_to_send = []
 
-                    embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
-
-                    with open(modules_file, 'w') as m:
-                        for module in course.get_modules():
-                            if hasattr(module, 'name'):
-                                handle_module(module, m, existing_modules, embed, embeds_to_send)
-                                
-                                for item in module.get_module_items():
-                                    if hasattr(item, 'title'):
-                                        handle_module(item, m, existing_modules, embed, embeds_to_send)
-                    
-                    if len(embed.fields) != 0:
-                        embeds_to_send.append(embed)
+                    all_modules = CanvasUtil.get_modules(course)
+                    differences = list(filter(lambda module: str(module.id) not in existing_modules, all_modules))
+                    embeds_to_send = get_embeds(differences)
                     
                     await send_embeds(course_dir, embeds_to_send)
+                    CanvasUtil.write_modules(modules_file, all_modules)
                 
                 except canvasapi.exceptions.InvalidAccessToken:
                     with open(watchers_file, 'r') as w:
                         for channel_id in w:
                             channel = bot.get_channel(int(channel_id.rstrip()))
+
                             if channel:
-                                await channel.send(f"Removing course with ID {course_id} from courses being tracked; "
-                                                   f"course access denied.")
+                                await channel.send(f"Removing course with ID {course_id} from courses "
+                                                   f"being tracked; course access denied.")
 
                     # Delete course directory if we no longer have permission to access the Canvas course.
                     shutil.rmtree(course_dir)
+
                 except Exception:
                     print(traceback.format_exc(), flush=True)

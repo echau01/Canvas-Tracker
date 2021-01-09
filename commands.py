@@ -10,6 +10,7 @@ from discord.ext.commands import Bot
 
 import periodic_tasks
 import util
+from util import CanvasUtil
 
 
 class BotManagement(commands.Cog):
@@ -77,29 +78,21 @@ class Main(commands.Cog):
         else:
             modules_file = f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/modules.txt'
             watchers_file = f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/watchers.txt'
+
             try:
                 course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
+
                 if args[0] == 'enable':
                     # The watchers file contains all the channels watching the course
                     added = await self.store_channel_in_file(ctx.channel, watchers_file)
-                    util.create_file_if_not_exists(modules_file)
+                    util.create_file(modules_file)
 
                     if added:
                         await ctx.send(f'This channel is now tracking {course.name}.')
                         
                         # We will only update the modules if modules_file is empty.
                         if os.stat(modules_file).st_size == 0:
-                            with open(modules_file, 'w') as f:
-                                for module in course.get_modules():
-                                    if hasattr(module, 'name'):
-                                        f.write(module.name + '\n')
-
-                                    for item in module.get_module_items():
-                                        if hasattr(item, 'title'):
-                                            if hasattr(item, 'html_url'):
-                                                f.write(item.html_url + '\n')
-                                            else:
-                                                f.write(item.title + '\n')
+                            CanvasUtil.write_modules(modules_file, CanvasUtil.get_modules(course))
                     else:
                         await ctx.send(f'This channel is already tracking {course.name}.')
                 else:   # this is the case where args[0] is 'disable'
@@ -107,12 +100,15 @@ class Main(commands.Cog):
                     
                     if os.stat(watchers_file).st_size == 0:
                         shutil.rmtree(f'{periodic_tasks.COURSES_DIRECTORY}/{args[1]}')
+
                     if deleted:
                         await ctx.send(f'This channel is no longer tracking {course.name}.')
                     else:
                         await ctx.send(f'This channel is already not tracking {course.name}.')
+
             except canvasapi.exceptions.ResourceDoesNotExist:
                 await ctx.send("The given course could not be found.")
+
             except canvasapi.exceptions.Unauthorized:
                 await ctx.send("Unauthorized request.")
     
@@ -136,7 +132,7 @@ class Main(commands.Cog):
         Returns False if the channel id was already contained in the file.
         """
 
-        util.create_file_if_not_exists(file_path)
+        util.create_file(file_path)
 
         with open(file_path, "a+") as f:
             # Start reading from the beginning of the file. Note: file *writes*
@@ -164,7 +160,7 @@ class Main(commands.Cog):
         Returns False if the channel id could not be found in the file.
         """
 
-        util.create_file_if_not_exists(file_path)
+        util.create_file(file_path)
 
         with open(file_path, "r") as f:
             channel_ids = f.readlines()
