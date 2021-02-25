@@ -23,7 +23,7 @@ COURSES_DIRECTORY = "./data/courses"
 
 CANVAS_URL = "https://canvas.ubc.ca/"
 CANVAS_TOKEN = os.getenv("CANVAS_TOKEN")
-CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN)
+CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN) if CANVAS_TOKEN else None
 
 # Module names and ModuleItem titles are truncated to this length
 MAX_IDENTIFIER_LENGTH = 100
@@ -36,6 +36,9 @@ EMBED_CHAR_LIMIT = 6000
 def setup(bot):
     bot.add_cog(Tasks(bot))
     print("Loaded Tasks cog", flush=True)
+
+    if not CANVAS_TOKEN:
+        print("[Error]: Could not find CANVAS_TOKEN variable in .env file", flush=True)
 
 
 class Tasks(commands.Cog):
@@ -57,8 +60,13 @@ class Tasks(commands.Cog):
         """
 
         await self.bot.wait_until_ready()
+
         while not self.bot.is_closed():
-            await check_canvas(self.bot)
+            if CANVAS_INSTANCE:
+                await check_canvas(self.bot)
+            else:
+                print("[Error]: No Canvas instance exists!", flush=True)
+
             await asyncio.sleep(3600)
 
 

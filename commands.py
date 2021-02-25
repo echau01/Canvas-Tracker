@@ -80,6 +80,10 @@ class Main(commands.Cog):
             watchers_file = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/watchers.txt"
 
             try:
+                if not periodic_tasks.CANVAS_INSTANCE:
+                    await ctx.send("Error: No Canvas instance exists!")
+                    return
+
                 course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
 
                 if args[0] == "enable":
@@ -120,9 +124,12 @@ class Main(commands.Cog):
 
         Download and store the latest Canvas modules for all courses being tracked.
         """
-        
-        await periodic_tasks.check_canvas(self.bot)
-        await ctx.send("Courses updated!")
+
+        if not periodic_tasks.CANVAS_INSTANCE:
+            await ctx.send("Error: No Canvas instance exists!")
+        else:
+            await periodic_tasks.check_canvas(self.bot)
+            await ctx.send("Courses updated!")
 
     @staticmethod
     async def store_channel_in_file(channel: discord.TextChannel, file_path: str):
