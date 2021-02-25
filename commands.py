@@ -115,7 +115,10 @@ class Main(commands.Cog):
 
             except canvasapi.exceptions.Unauthorized:
                 await ctx.send("Unauthorized request.")
-    
+
+            except canvasapi.exceptions.InvalidAccessToken:
+                await ctx.send("Your Canvas token is invalid.")
+
     @commands.command(hidden=True)
     @commands.guild_only()
     async def update_courses(self, ctx):
