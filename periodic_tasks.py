@@ -217,7 +217,7 @@ async def check_canvas(bot: Bot):
                     await send_embeds(course_dir, embeds_to_send)
                     CanvasUtil.write_modules(modules_file, all_modules)
                 
-                except canvasapi.exceptions.InvalidAccessToken:
+                except (canvasapi.exceptions.InvalidAccessToken, canvasapi.exceptions.Unauthorized, canvasapi.exceptions.Forbidden):
                     with open(watchers_file, 'r') as w:
                         for channel_id in w:
                             channel = bot.get_channel(int(channel_id.rstrip()))
