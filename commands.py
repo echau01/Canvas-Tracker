@@ -68,7 +68,7 @@ class Main(commands.Cog):
         """
         `!track <enable | disable> <course_id>`
 
-        Configure the current text channel to receive an update when a course module is published on Canvas.
+        Configure the current text channel to receive an update when a new course module is published on Canvas.
         """
 
         if len(args) != 2:
@@ -76,15 +76,15 @@ class Main(commands.Cog):
         elif args[0] != "enable" and args[0] != "disable":
             await ctx.send("Usage: `!track <enable | disable> <course_id>`")
         else:
-            modules_file = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/modules.txt"
-            watchers_file = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}/watchers.txt"
-
             try:
+                course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
+                course_folder = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]} ({course.name})"
+                modules_file = f"{course_folder}/modules.txt"
+                watchers_file = f"{course_folder}/watchers.txt"
+
                 if not periodic_tasks.CANVAS_INSTANCE:
                     await ctx.send("Error: No Canvas instance exists!")
                     return
-
-                course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
 
                 if args[0] == "enable":
                     # The watchers file contains all the channels watching the course
@@ -103,7 +103,7 @@ class Main(commands.Cog):
                     deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
                     
                     if os.stat(watchers_file).st_size == 0:
-                        shutil.rmtree(f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]}")
+                        shutil.rmtree(course_folder)
 
                     if deleted:
                         await ctx.send(f"This channel is no longer tracking {course.name}.")
@@ -166,7 +166,7 @@ class Main(commands.Cog):
     async def delete_channel_from_file(channel: discord.TextChannel, file_path: str):
         """
         Removes given text channel's id from file with given path if the channel id
-        is contained in the file. Returns True if the channel id was deleted to the file. 
+        is contained in the file. Returns True if the channel id was deleted from the file.
         Returns False if the channel id could not be found in the file.
         """
 

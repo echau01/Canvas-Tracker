@@ -1,4 +1,5 @@
 import pathlib
+import periodic_tasks
 import os
 from typing import List, Union
 
@@ -44,3 +45,7 @@ class CanvasUtil:
         with open(file_path, 'w') as f:
             for module in modules:
                 f.write(f"{module.id}\n")
+
+    @staticmethod
+    def get_course_directory(course_id: str, course_name: str):
+        return f"{periodic_tasks.COURSES_DIRECTORY}/{course_id} ({course_name})"

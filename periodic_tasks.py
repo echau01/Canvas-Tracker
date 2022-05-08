@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import os
 import shutil
 import traceback
@@ -27,9 +26,7 @@ CANVAS_INSTANCE = Canvas(CANVAS_URL, CANVAS_TOKEN) if CANVAS_TOKEN else None
 
 # Module names and ModuleItem titles are truncated to this length
 MAX_IDENTIFIER_LENGTH = 100
-
 RED = 0xff0000
-
 EMBED_CHAR_LIMIT = 6000
 
 
@@ -53,7 +50,6 @@ class Tasks(commands.Cog):
 
     async def check_canvas_hourly(self):
         """
-        Every folder in COURSES_DIRECTORY is named after the ID of a Canvas course we are tracking.
         This function checks the Canvas courses we are tracking every hour, sending any new modules
         to all Discord channels that are tracking those courses.
         """
@@ -62,7 +58,10 @@ class Tasks(commands.Cog):
 
         while not self.bot.is_closed():
             if CANVAS_INSTANCE:
-                await check_canvas(self.bot)
+                try:
+                    await check_canvas(self.bot)
+                except Exception:
+                    print(traceback.format_exc(), flush=True)
             else:
                 print("[Error]: No Canvas instance exists!", flush=True)
 
@@ -103,7 +102,7 @@ async def check_canvas(bot: Bot):
 
     def get_embeds(modules: List[Union[Module, ModuleItem]]) -> List[discord.Embed]:
         """
-        Returns a list of Discord embeds to send to live channels.
+        Returns a list of Discord embeds to send to watcher channels.
         """
 
         embed = discord.Embed(title=f"New modules found for {course.name}:", color=RED)
@@ -146,51 +145,56 @@ async def check_canvas(bot: Bot):
                     for element in embed_list:
                         await channel.send(embed=element)
 
-    async def remove_course_with_insufficient_permissions(bot: Bot, course_dir: str, course_id: int,
-                                                          watchers_file_path: str):
-        with open(watchers_file_path, 'r') as w:
-            for channel_id in w:
-                channel = bot.get_channel(int(channel_id.rstrip()))
+    async def remove_inaccessible_course(bot: Bot, course_dir: str):
+        try:
+            with open(f"{course_dir}/watchers.txt", 'r') as w:
+                for channel_id in w:
+                    channel = bot.get_channel(int(channel_id.rstrip()))
 
-                if channel:
-                    await channel.send(f"Removing course with ID {course_id} from courses "
-                                       f"being tracked; course access denied.")
-        # Delete course directory if we no longer have permission to access the Canvas course.
+                    if channel:
+                        await channel.send(f"Removing course {course_dir} from courses "
+                                           f"being tracked; course access denied.")
+        except FileNotFoundError:
+            pass
+
         shutil.rmtree(course_dir)
 
     if os.path.exists(COURSES_DIRECTORY):
         courses = [name for name in os.listdir(COURSES_DIRECTORY)]
 
-        # each folder in the courses directory is named with a course id (which is a positive integer)
-        for course_id_str in courses:
+        for course_name in courses:
+            course_id_str = course_name.split()[0]
             if course_id_str.isdigit():
                 course_id = int(course_id_str)
-                course_dir = f"{COURSES_DIRECTORY}/{course_id}"
+                current_course_dir = f"{COURSES_DIRECTORY}/{course_name}"
+
+                try:
+                    course = CANVAS_INSTANCE.get_course(course_id)
+                except (canvasapi.exceptions.InvalidAccessToken, canvasapi.exceptions.Unauthorized,
+                        canvasapi.exceptions.Forbidden):
+                    await remove_inaccessible_course(bot, current_course_dir)
+                    return
+
+                course_dir = CanvasUtil.get_course_directory(course_id_str, course.name)
+                if current_course_dir != course_dir:
+                    os.rename(current_course_dir, course_dir)
+
                 modules_file = f"{course_dir}/modules.txt"
                 watchers_file = f"{course_dir}/watchers.txt"
                 util.create_file_if_not_exists(modules_file)
                 util.create_file_if_not_exists(watchers_file)
+                print(f"Downloading modules for {course.name}", flush=True)
+                all_modules = CanvasUtil.get_modules(course)
 
-                try:
-                    course = CANVAS_INSTANCE.get_course(course_id)
-                    print(f"Downloading modules for {course.name}", flush=True)
+                with open(modules_file, 'r') as m:
+                    existing_modules = set(m.read().splitlines())
 
-                    with open(modules_file, 'r') as m:
-                        existing_modules = set(m.read().splitlines())
+                differences = list(filter(lambda module: str(module.id) not in existing_modules, all_modules))
+                embeds_to_send = get_embeds(differences)
+                await send_embeds_and_cleanup_watchers_file(embeds_to_send, watchers_file)
 
-                    all_modules = CanvasUtil.get_modules(course)
-                    differences = list(filter(lambda module: str(module.id) not in existing_modules, all_modules))
-                    embeds_to_send = get_embeds(differences)
-                    
-                    await send_embeds_and_cleanup_watchers_file(embeds_to_send, watchers_file)
-
-                    # Delete the course directory if there are no more channels watching the course.
-                    if os.stat(watchers_file).st_size == 0:
-                        shutil.rmtree(course_dir)
-                    else:
-                        CanvasUtil.write_modules_to_file(modules_file, all_modules)
-                except (canvasapi.exceptions.InvalidAccessToken, canvasapi.exceptions.Unauthorized,
-                        canvasapi.exceptions.Forbidden):
-                    await remove_course_with_insufficient_permissions(bot, course_dir, course_id, watchers_file)
-                except Exception:
-                    print(traceback.format_exc(), flush=True)
+                # Delete the course directory if there are no more channels watching the course.
+                if os.stat(watchers_file).st_size == 0:
+                    shutil.rmtree(course_dir)
+                else:
+                    CanvasUtil.write_modules_to_file(modules_file, all_modules)
