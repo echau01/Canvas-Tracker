@@ -89,14 +89,14 @@ class Main(commands.Cog):
                 if args[0] == "enable":
                     # The watchers file contains all the channels watching the course
                     added = await self.store_channel_in_file(ctx.channel, watchers_file)
-                    util.create_file(modules_file)
+                    util.create_file_if_not_exists(modules_file)
 
                     if added:
                         await ctx.send(f"This channel is now tracking {course.name}.")
                         
                         # We will only update the modules if modules_file is empty.
                         if os.stat(modules_file).st_size == 0:
-                            CanvasUtil.write_modules(modules_file, CanvasUtil.get_modules(course))
+                            CanvasUtil.write_modules_to_file(modules_file, CanvasUtil.get_modules(course))
                     else:
                         await ctx.send(f"This channel is already tracking {course.name}.")
                 else:   # this is the case where args[0] is "disable"
@@ -142,7 +142,7 @@ class Main(commands.Cog):
         Returns False if the channel id was already contained in the file.
         """
 
-        util.create_file(file_path)
+        util.create_file_if_not_exists(file_path)
 
         with open(file_path, 'a+') as f:
             # Start reading from the beginning of the file. Note: file *writes*
@@ -170,7 +170,7 @@ class Main(commands.Cog):
         Returns False if the channel id could not be found in the file.
         """
 
-        util.create_file(file_path)
+        util.create_file_if_not_exists(file_path)
 
         with open(file_path, 'r') as f:
             channel_ids = f.readlines()

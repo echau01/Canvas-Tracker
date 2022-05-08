@@ -6,7 +6,7 @@ from canvasapi.course import Course
 from canvasapi.module import Module, ModuleItem
 
 
-def create_file(file_path):
+def create_file_if_not_exists(file_path):
     """
     Creates file with given path (as str) if the file does not already exist.
     All required directories are created, too.
@@ -36,7 +36,7 @@ class CanvasUtil:
         return all_modules
 
     @staticmethod
-    def write_modules(file_path: str, modules: List[Union[Module, ModuleItem]]):
+    def write_modules_to_file(file_path: str, modules: List[Union[Module, ModuleItem]]):
         """
         Stores the IDs of all modules in file with given path.
         """
