@@ -47,5 +47,5 @@ class CanvasUtil:
                 f.write(f"{module.id}\n")
 
     @staticmethod
-    def get_course_directory(course_id: str, course_name: str):
+    def get_course_directory(course_id: str, course_name: str) -> str:
         return f"{periodic_tasks.COURSES_DIRECTORY}/{course_id} ({course_name})"

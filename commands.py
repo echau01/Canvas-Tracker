@@ -1,6 +1,7 @@
 import os
 import shutil
 import traceback
+from typing import List
 
 import canvasapi
 import canvasapi.exceptions
@@ -78,46 +79,47 @@ class Main(commands.Cog):
         else:
             try:
                 course = periodic_tasks.CANVAS_INSTANCE.get_course(args[1])
-                course_folder = f"{periodic_tasks.COURSES_DIRECTORY}/{args[1]} ({course.name})"
-                modules_file = f"{course_folder}/modules.txt"
-                watchers_file = f"{course_folder}/watchers.txt"
-
-                if not periodic_tasks.CANVAS_INSTANCE:
-                    await ctx.send("Error: No Canvas instance exists!")
-                    return
-
-                if args[0] == "enable":
-                    # The watchers file contains all the channels watching the course
-                    added = await self.store_channel_in_file(ctx.channel, watchers_file)
-                    util.create_file_if_not_exists(modules_file)
-
-                    if added:
-                        await ctx.send(f"This channel is now tracking {course.name}.")
-                        
-                        # We will only update the modules if modules_file is empty.
-                        if os.stat(modules_file).st_size == 0:
-                            CanvasUtil.write_modules_to_file(modules_file, CanvasUtil.get_modules(course))
-                    else:
-                        await ctx.send(f"This channel is already tracking {course.name}.")
-                else:   # this is the case where args[0] is "disable"
-                    deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
-                    
-                    if os.stat(watchers_file).st_size == 0:
-                        shutil.rmtree(course_folder)
-
-                    if deleted:
-                        await ctx.send(f"This channel is no longer tracking {course.name}.")
-                    else:
-                        await ctx.send(f"This channel is already not tracking {course.name}.")
-
             except canvasapi.exceptions.ResourceDoesNotExist:
                 await ctx.send("The given course could not be found.")
-
+                return
             except canvasapi.exceptions.Unauthorized:
                 await ctx.send("Unauthorized request.")
-
+                return
             except canvasapi.exceptions.InvalidAccessToken:
                 await ctx.send("Your Canvas token is invalid.")
+                return
+
+            course_folder = CanvasUtil.get_course_directory(args[1], course.name)
+            modules_file = f"{course_folder}/modules.txt"
+            watchers_file = f"{course_folder}/watchers.txt"
+
+            if not periodic_tasks.CANVAS_INSTANCE:
+                await ctx.send("Error: No Canvas instance exists!")
+                return
+
+            if args[0] == "enable":
+                # The watchers file contains all the channels watching the course
+                added = await self.store_channel_in_file(ctx.channel, watchers_file)
+                util.create_file_if_not_exists(modules_file)
+
+                if added:
+                    await ctx.send(f"This channel is now tracking {course.name}.")
+
+                    # We will only update the modules if modules_file is empty.
+                    if os.stat(modules_file).st_size == 0:
+                        CanvasUtil.write_modules_to_file(modules_file, CanvasUtil.get_modules(course))
+                else:
+                    await ctx.send(f"This channel is already tracking {course.name}.")
+            else:   # this is the case where args[0] is "disable"
+                deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
+
+                if os.stat(watchers_file).st_size == 0:
+                    shutil.rmtree(course_folder)
+
+                if deleted:
+                    await ctx.send(f"This channel is no longer tracking {course.name}.")
+                else:
+                    await ctx.send(f"This channel is already not tracking {course.name}.")
 
     @commands.command(hidden=True)
     @commands.guild_only()
@@ -133,6 +135,40 @@ class Main(commands.Cog):
         else:
             await periodic_tasks.check_canvas(self.bot)
             await ctx.send("Courses updated!")
+
+    @commands.command()
+    @commands.guild_only()
+    async def get_tracked_courses(self, ctx):
+        """
+        `!get_tracked_courses`
+
+        Sends a list of all courses being tracked by this channel.
+        """
+
+        def get_courses_tracked_by_channel(channel_id: int) -> List[str]:
+            course_list = []
+            for course_dir in os.listdir(periodic_tasks.COURSES_DIRECTORY):
+                try:
+                    with open(f"{periodic_tasks.COURSES_DIRECTORY}/{course_dir}/watchers.txt", "r") as w:
+                        for line in w:
+                            if line == f"{channel_id}\n":
+                                course_list.append(course_dir)
+                                break
+                except FileNotFoundError:
+                    continue
+
+            return course_list
+
+        try:
+            courses = get_courses_tracked_by_channel(ctx.channel.id)
+            if len(courses) == 0:
+                message = "No courses are being tracked in this channel."
+            else:
+                message = "\n".join(f"{i + 1}. {courses[i]}" for i in range(len(courses)))
+        except FileNotFoundError:   # will only occur if there is no root courses directory
+            message = "No courses are being tracked in this channel."
+
+        await ctx.send(message)
 
     @staticmethod
     async def store_channel_in_file(channel: discord.TextChannel, file_path: str):
