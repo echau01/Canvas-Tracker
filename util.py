@@ -7,7 +7,7 @@ from canvasapi.course import Course
 from canvasapi.module import Module, ModuleItem
 
 
-def create_file_if_not_exists(file_path):
+def ensure_file_exists(file_path):
     """
     Creates file with given path (as str) if the file does not already exist.
     All required directories are created, too.
@@ -47,5 +47,23 @@ class CanvasUtil:
                 f.write(f"{module.id}\n")
 
     @staticmethod
-    def get_course_directory(course_id: str, course_name: str) -> str:
-        return f"{periodic_tasks.COURSES_DIRECTORY}/{course_id} ({course_name})"
+    def get_course_directory(course_id: str) -> str:
+        return f"{periodic_tasks.COURSES_DIRECTORY}/{course_id}"
+
+    @staticmethod
+    def get_modules_file_path(course_id: str) -> str:
+        return f"{CanvasUtil.get_course_directory(course_id)}/modules.txt"
+
+    @staticmethod
+    def get_watchers_file_path(course_id: str) -> str:
+        return f"{CanvasUtil.get_course_directory(course_id)}/watchers.txt"
+
+    @staticmethod
+    def get_course_name_file_path(course_id: str):
+        return f"{CanvasUtil.get_course_directory(course_id)}/course_name.txt"
+
+    @staticmethod
+    def store_course_name_locally(course_id: str, course_name: str):
+        file = CanvasUtil.get_course_name_file_path(course_id)
+        with open(file, 'w+') as f:
+            f.write(f"{course_name}\n")

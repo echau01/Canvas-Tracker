@@ -6,6 +6,7 @@ from typing import List, Union
 
 import canvasapi.exceptions
 from canvasapi import Canvas
+from canvasapi.course import Course
 from canvasapi.module import Module, ModuleItem
 import discord
 from discord.ext import commands
@@ -100,7 +101,7 @@ async def check_canvas(bot: Bot):
         
         return field
 
-    def get_embeds(modules: List[Union[Module, ModuleItem]]) -> List[discord.Embed]:
+    def get_embeds(course: Course, modules: List[Union[Module, ModuleItem]]) -> List[discord.Embed]:
         """
         Returns a list of Discord embeds to send to watcher channels.
         """
@@ -145,56 +146,72 @@ async def check_canvas(bot: Bot):
                     for element in embed_list:
                         await channel.send(embed=element)
 
-    async def remove_inaccessible_course(bot: Bot, course_dir: str):
+    def get_new_modules(retrieved_modules: List[Union[Module, ModuleItem]],
+                        course_id: str) -> List[Union[Module, ModuleItem]]:
+        modules_file = CanvasUtil.get_modules_file_path(course_id)
+        util.ensure_file_exists(modules_file)
+
+        with open(modules_file, 'r') as m:
+            existing_modules = set(m.read().splitlines())
+
+        return list(filter(lambda module: str(module.id) not in existing_modules, retrieved_modules))
+
+    def ensure_course_folder_name_is_correct(course_id: str, current_course_folder_name: str) -> str:
+        current_course_directory = f"{COURSES_DIRECTORY}/{current_course_folder_name}"
+        course_directory = CanvasUtil.get_course_directory(course_id)
+        if current_course_directory != course_directory:
+            os.rename(current_course_directory, course_directory)
+
+        return course_directory
+
+    async def remove_inaccessible_course(discord_bot: Bot, course_directory: str):
         try:
-            with open(f"{course_dir}/watchers.txt", 'r') as w:
+            with open(f"{course_directory}/watchers.txt", 'r') as w:
                 for channel_id in w:
-                    channel = bot.get_channel(int(channel_id.rstrip()))
+                    channel = discord_bot.get_channel(int(channel_id.rstrip()))
 
                     if channel:
-                        await channel.send(f"Removing course {course_dir} from courses "
+                        await channel.send(f"Removing course {course_directory} from courses "
                                            f"being tracked; course access denied.")
         except FileNotFoundError:
             pass
 
-        shutil.rmtree(course_dir)
+        shutil.rmtree(course_directory)
+
+    async def retrieve_and_send_new_modules(course_id: str):
+        try:
+            course = CANVAS_INSTANCE.get_course(int(course_id_str))
+        except (canvasapi.exceptions.InvalidAccessToken, canvasapi.exceptions.Unauthorized,
+                canvasapi.exceptions.Forbidden):
+            raise InaccessibleCanvasCourseException()
+
+        CanvasUtil.store_course_name_locally(course_id, course.name)
+
+        print(f"Downloading modules for {course.name}", flush=True)
+        all_modules = CanvasUtil.get_modules(course)
+        embeds_to_send = get_embeds(course, get_new_modules(all_modules, course_id))
+
+        watchers_file = CanvasUtil.get_watchers_file_path(course_id)
+        util.ensure_file_exists(watchers_file)
+        await send_embeds_and_cleanup_watchers_file(embeds_to_send, watchers_file)
+
+        # Delete the course directory if there are no more channels watching the course.
+        if os.stat(watchers_file).st_size == 0:
+            shutil.rmtree(CanvasUtil.get_course_directory(course_id))
+        else:
+            CanvasUtil.write_modules_to_file(CanvasUtil.get_modules_file_path(course_id), all_modules)
 
     if os.path.exists(COURSES_DIRECTORY):
-        courses = [name for name in os.listdir(COURSES_DIRECTORY)]
-
-        for course_name in courses:
-            course_id_str = course_name.split()[0]
+        for course_folder_name in os.listdir(COURSES_DIRECTORY):
+            course_id_str = course_folder_name.split()[0]
             if course_id_str.isdigit():
-                course_id = int(course_id_str)
-                current_course_dir = f"{COURSES_DIRECTORY}/{course_name}"
+                course_dir = ensure_course_folder_name_is_correct(course_id_str, course_folder_name)
 
                 try:
-                    course = CANVAS_INSTANCE.get_course(course_id)
-                except (canvasapi.exceptions.InvalidAccessToken, canvasapi.exceptions.Unauthorized,
-                        canvasapi.exceptions.Forbidden):
-                    await remove_inaccessible_course(bot, current_course_dir)
-                    return
+                    await retrieve_and_send_new_modules(course_id_str)
+                except InaccessibleCanvasCourseException:
+                    await remove_inaccessible_course(bot, course_dir)
 
-                course_dir = CanvasUtil.get_course_directory(course_id_str, course.name)
-                if current_course_dir != course_dir:
-                    os.rename(current_course_dir, course_dir)
 
-                modules_file = f"{course_dir}/modules.txt"
-                watchers_file = f"{course_dir}/watchers.txt"
-                util.create_file_if_not_exists(modules_file)
-                util.create_file_if_not_exists(watchers_file)
-                print(f"Downloading modules for {course.name}", flush=True)
-                all_modules = CanvasUtil.get_modules(course)
-
-                with open(modules_file, 'r') as m:
-                    existing_modules = set(m.read().splitlines())
-
-                differences = list(filter(lambda module: str(module.id) not in existing_modules, all_modules))
-                embeds_to_send = get_embeds(differences)
-                await send_embeds_and_cleanup_watchers_file(embeds_to_send, watchers_file)
-
-                # Delete the course directory if there are no more channels watching the course.
-                if os.stat(watchers_file).st_size == 0:
-                    shutil.rmtree(course_dir)
-                else:
-                    CanvasUtil.write_modules_to_file(modules_file, all_modules)
+class InaccessibleCanvasCourseException(Exception):
+    pass

@@ -89,9 +89,7 @@ class Main(commands.Cog):
                 await ctx.send("Your Canvas token is invalid.")
                 return
 
-            course_folder = CanvasUtil.get_course_directory(args[1], course.name)
-            modules_file = f"{course_folder}/modules.txt"
-            watchers_file = f"{course_folder}/watchers.txt"
+            watchers_file = CanvasUtil.get_watchers_file_path(args[1])
 
             if not periodic_tasks.CANVAS_INSTANCE:
                 await ctx.send("Error: No Canvas instance exists!")
@@ -100,7 +98,9 @@ class Main(commands.Cog):
             if args[0] == "enable":
                 # The watchers file contains all the channels watching the course
                 added = await self.store_channel_in_file(ctx.channel, watchers_file)
-                util.create_file_if_not_exists(modules_file)
+                CanvasUtil.store_course_name_locally(args[1], course.name)
+                modules_file = CanvasUtil.get_modules_file_path(args[1])
+                util.ensure_file_exists(modules_file)
 
                 if added:
                     await ctx.send(f"This channel is now tracking {course.name}.")
@@ -114,7 +114,7 @@ class Main(commands.Cog):
                 deleted = await self.delete_channel_from_file(ctx.channel, watchers_file)
 
                 if os.stat(watchers_file).st_size == 0:
-                    shutil.rmtree(course_folder)
+                    shutil.rmtree(CanvasUtil.get_course_directory(args[1]))
 
                 if deleted:
                     await ctx.send(f"This channel is no longer tracking {course.name}.")
@@ -148,11 +148,23 @@ class Main(commands.Cog):
         def get_courses_tracked_by_channel(channel_id: int) -> List[str]:
             course_list = []
             for course_dir in os.listdir(periodic_tasks.COURSES_DIRECTORY):
+                course_id = course_dir.split()[0]
+                full_course_dir = f"{periodic_tasks.COURSES_DIRECTORY}/{course_dir}"
+
                 try:
-                    with open(f"{periodic_tasks.COURSES_DIRECTORY}/{course_dir}/watchers.txt", "r") as w:
+                    with open(f"{full_course_dir}/course_name.txt") as f:
+                        course_name = f.readline()
+                except FileNotFoundError:
+                    course_name = ""
+
+                if course_name == "":
+                    course_name = "*Course name not found*"
+
+                try:
+                    with open(f"{full_course_dir}/watchers.txt", "r") as w:
                         for line in w:
                             if line == f"{channel_id}\n":
-                                course_list.append(course_dir)
+                                course_list.append(f"{course_name} (ID: {course_id})")
                                 break
                 except FileNotFoundError:
                     continue
@@ -165,7 +177,7 @@ class Main(commands.Cog):
                 message = "No courses are being tracked in this channel."
             else:
                 message = "\n".join(f"{i + 1}. {courses[i]}" for i in range(len(courses)))
-        except FileNotFoundError:   # will only occur if there is no root courses directory
+        except FileNotFoundError:   # occurs if there is no root courses directory
             message = "No courses are being tracked in this channel."
 
         await ctx.send(message)
@@ -178,7 +190,7 @@ class Main(commands.Cog):
         Returns False if the channel id was already contained in the file.
         """
 
-        util.create_file_if_not_exists(file_path)
+        util.ensure_file_exists(file_path)
 
         with open(file_path, 'a+') as f:
             # Start reading from the beginning of the file. Note: file *writes*
@@ -206,7 +218,7 @@ class Main(commands.Cog):
         Returns False if the channel id could not be found in the file.
         """
 
-        util.create_file_if_not_exists(file_path)
+        util.ensure_file_exists(file_path)
 
         with open(file_path, 'r') as f:
             channel_ids = f.readlines()
