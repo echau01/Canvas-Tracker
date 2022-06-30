@@ -153,7 +153,7 @@ class Main(commands.Cog):
 
                 try:
                     with open(f"{full_course_dir}/course_name.txt") as f:
-                        course_name = f.readline()
+                        course_name = f.readline().rstrip('\n')
                 except FileNotFoundError:
                     course_name = ""
 
