@@ -51,19 +51,27 @@ class CanvasUtil:
         return f"{periodic_tasks.COURSES_DIRECTORY}/{course_id}"
 
     @staticmethod
+    def get_course_name_file_path_by_course_dir(course_directory: str):
+        return f"{course_directory}/course_name.txt"
+
+    @staticmethod
+    def get_watchers_file_path_by_course_dir(course_directory: str) -> str:
+        return f"{course_directory}/watchers.txt"
+
+    @staticmethod
     def get_modules_file_path(course_id: str) -> str:
         return f"{CanvasUtil.get_course_directory(course_id)}/modules.txt"
 
     @staticmethod
-    def get_watchers_file_path(course_id: str) -> str:
-        return f"{CanvasUtil.get_course_directory(course_id)}/watchers.txt"
+    def get_watchers_file_path_by_course_id(course_id: str) -> str:
+        return CanvasUtil.get_watchers_file_path_by_course_dir(CanvasUtil.get_course_directory(course_id))
 
     @staticmethod
-    def get_course_name_file_path(course_id: str):
-        return f"{CanvasUtil.get_course_directory(course_id)}/course_name.txt"
+    def get_course_name_file_path_by_course_id(course_id: str):
+        return CanvasUtil.get_course_name_file_path_by_course_dir(CanvasUtil.get_course_directory(course_id))
 
     @staticmethod
     def store_course_name_locally(course_id: str, course_name: str):
-        file = CanvasUtil.get_course_name_file_path(course_id)
+        file = CanvasUtil.get_course_name_file_path_by_course_id(course_id)
         with open(file, 'w+') as f:
             f.write(f"{course_name}\n")

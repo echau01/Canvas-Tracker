@@ -166,13 +166,19 @@ async def check_canvas(bot: Bot):
 
     async def remove_inaccessible_course(discord_bot: Bot, course_directory: str):
         try:
-            with open(f"{course_directory}/watchers.txt", 'r') as w:
+            with open(CanvasUtil.get_course_name_file_path_by_course_dir(course_directory), 'r') as f:
+                course_name = f.readline().strip('\n')
+        except FileNotFoundError:
+            course_name = "<Course name not found>"
+
+        try:
+            with open(CanvasUtil.get_watchers_file_path_by_course_dir(course_directory), 'r') as w:
                 for channel_id in w:
                     channel = discord_bot.get_channel(int(channel_id.rstrip()))
 
                     if channel:
-                        await channel.send(f"Removing course {course_directory} from courses "
-                                           f"being tracked; course access denied.")
+                        await channel.send(f"Removing course {course_name} (ID: {course_directory.split('/')[-1]}) "
+                                           f"from courses being tracked; course access denied.")
         except FileNotFoundError:
             pass
 
@@ -191,7 +197,7 @@ async def check_canvas(bot: Bot):
         all_modules = CanvasUtil.get_modules(course)
         embeds_to_send = get_embeds(course, get_new_modules(all_modules, course_id))
 
-        watchers_file = CanvasUtil.get_watchers_file_path(course_id)
+        watchers_file = CanvasUtil.get_watchers_file_path_by_course_id(course_id)
         util.ensure_file_exists(watchers_file)
         await send_embeds_and_cleanup_watchers_file(embeds_to_send, watchers_file)
 

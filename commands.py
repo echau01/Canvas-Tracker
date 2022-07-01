@@ -89,7 +89,7 @@ class Main(commands.Cog):
                 await ctx.send("Your Canvas token is invalid.")
                 return
 
-            watchers_file = CanvasUtil.get_watchers_file_path(args[1])
+            watchers_file = CanvasUtil.get_watchers_file_path_by_course_id(args[1])
 
             if not periodic_tasks.CANVAS_INSTANCE:
                 await ctx.send("Error: No Canvas instance exists!")
@@ -148,23 +148,20 @@ class Main(commands.Cog):
         def get_courses_tracked_by_channel(channel_id: int) -> List[str]:
             course_list = []
             for course_dir in os.listdir(periodic_tasks.COURSES_DIRECTORY):
-                course_id = course_dir.split()[0]
                 full_course_dir = f"{periodic_tasks.COURSES_DIRECTORY}/{course_dir}"
 
                 try:
-                    with open(f"{full_course_dir}/course_name.txt") as f:
+                    with open(CanvasUtil.get_course_name_file_path_by_course_dir(full_course_dir)) as f:
                         course_name = f.readline().rstrip('\n')
                 except FileNotFoundError:
-                    course_name = ""
-
-                if course_name == "":
-                    course_name = "*Course name not found*"
+                    course_name = "<Course name not found>"
 
                 try:
-                    with open(f"{full_course_dir}/watchers.txt", "r") as w:
+                    with open(CanvasUtil.get_watchers_file_path_by_course_dir(full_course_dir), "r") as w:
                         for line in w:
                             if line == f"{channel_id}\n":
-                                course_list.append(f"{course_name} (ID: {course_id})")
+                                # The course subfolder's name is exactly the course ID.
+                                course_list.append(f"{course_name} (ID: {course_dir})")
                                 break
                 except FileNotFoundError:
                     continue
